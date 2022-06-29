@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "mimalloc",
+    "License": "MIT License",
+    "License File": "LICENSE",
+    "Version Number": "2.0.6",
+    "Owner": "Microsoft",
+    "Upstream URL": "https://github.com/microsoft/mimalloc",
+    "Description": "mimalloc is a compact general purpose allocator with excellent performance."
+  }
+]
