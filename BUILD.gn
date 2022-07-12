@@ -1,0 +1,48 @@
+import("//build/ohos.gni")
+
+config("libmimalloc_config") {
+  include_dirs = [ "include" ]
+}
+
+ohos_shared_library("libmimalloc_share") {
+  public_configs = [ ":libmimalloc_config" ]
+
+  sources = [
+    "src/static.c"
+  ]
+
+  cflags = [ 
+    "-std=c11",
+    "-Wno-unused-variable",
+    "-Wno-uninitialized",
+    "-Qunused-arguments",
+    "-Wa,--noexecstack",
+    "-Werror=implicit-function-declaration",
+    "-Werror=implicit-int",
+    "-Werror=pointer-arith",
+    "-Werror=pointer-sign",
+    "-fdata-sections",
+    "-ffreestanding",
+    "-ffunction-sections",
+    "-fno-asynchronous-unwind-tables",
+    "-fno-unwind-tables",
+    "-fomit-frame-pointer",
+    "-frounding-math",
+    "-pipe",
+    "-fPIC",
+    "-DMI_DEBUG=0",
+    "-DMI_STAT=2",
+    "-Wno-unsupported-floating-point-opt",
+    "-Wno-bitwise-op-parentheses"
+  ]  
+
+  defines = [
+      "MI_MALLOC_OVERRIDE",
+      "MI_SHARED_LIB",
+      "MI_SHARED_LIB_EXPORT",
+      "MI_TLS_PTHREAD",
+      "mimalloc_EXPORTS"
+  ]
+
+  install_enable = true
+}
