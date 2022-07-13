@@ -46,6 +46,8 @@ ohos_shared_library("libmimalloc_share") {
   ]
 
   install_enable = true
+  subsystem_name = "thirdparty"
+  part_name = "mimalloc"
 }
 
 ohos_static_library("libmimalloc_static") {
@@ -59,4 +61,7 @@ ohos_static_library("libmimalloc_static") {
     "MI_TLS_PTHREAD",
     "mimalloc_EXPORTS"
   ]
+
+  subsystem_name = "thirdparty"
+  part_name = "mimalloc"
 }
