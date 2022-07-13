@@ -22,13 +22,12 @@ config("libmimalloc_config") {
     "-frounding-math",
     "-pipe",
     "-DMI_DEBUG=0",
-    "-DMI_STAT=2",
     "-Wno-unsupported-floating-point-opt",
     "-Wno-bitwise-op-parentheses"
   ]
 }
 
-ohos_shared_library("libmimalloc_share") {
+ohos_shared_library("libmimalloc_shared") {
   configs = [ ":libmimalloc_config" ]
 
   sources = [
