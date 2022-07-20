@@ -30,6 +30,8 @@ config("libmimalloc_config") {
 ohos_shared_library("libmimalloc_shared") {
   configs = [ ":libmimalloc_config" ]
 
+  license_file = "./NOTICE"
+
   sources = [
     "src/static.c"
   ]
@@ -51,6 +53,8 @@ ohos_shared_library("libmimalloc_shared") {
 
 ohos_static_library("libmimalloc_static") {
   configs = [ ":libmimalloc_config" ]
+
+  license_file = "./NOTICE"
 
   sources = [
     "src/static.c"
