@@ -1,0 +1,29 @@
+{
+    "name": "@ohos/mimalloc",
+    "description": "mimalloc is a general purpose allocator with excellent performance characteristics, it is free software available under the MIT License",
+    "version": "2.0.6",
+    "license": "MIT",
+    "publishAs": "source",
+    "component": {
+        "name": "mimalloc",
+        "subsystem": "thirdparty",
+        "syscap": [],
+        "features": [],
+        "adapted_system_type": [],
+        "rom": "",
+        "ram": "",
+        "deps": {
+            "components": [],
+            "third_party": []
+        },
+        "build": {
+            "sub_component": [
+                "//third_party/mimalloc:libmimalloc_shared",
+                "//third_party/mimalloc:libmimalloc_static"
+            ],
+            "inner_kits": [],
+            "test": []
+        }
+    }
+}
+
