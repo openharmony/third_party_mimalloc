@@ -95,6 +95,8 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #include <stddef.h>     // size_t
 #include <stdbool.h>    // bool
+#include <stdint.h>     // uint64_t
+#include <stdio.h>      // FILE
 
 #ifdef __cplusplus
 extern "C" {
@@ -145,12 +147,20 @@ mi_decl_export void mi_register_output(mi_output_fun* out, void* arg) mi_attr_no
 typedef void (mi_cdecl mi_error_fun)(int err, void* arg);
 mi_decl_export void mi_register_error(mi_error_fun* fun, void* arg);
 
+typedef struct mallinfo_s {
+  uint64_t mmap_calls;
+  uint64_t reserved;
+  uint64_t allocated;
+  uint64_t freed;
+} mallinfo_t;
+
 mi_decl_export void mi_collect(bool force)    mi_attr_noexcept;
 mi_decl_export int  mi_version(void)          mi_attr_noexcept;
 mi_decl_export void mi_stats_reset(void)      mi_attr_noexcept;
 mi_decl_export void mi_stats_merge(void)      mi_attr_noexcept;
 mi_decl_export void mi_stats_print(void* out) mi_attr_noexcept;  // backward compatibility: `out` is ignored and should be NULL
 mi_decl_export void mi_stats_print_out(mi_output_fun* out, void* arg) mi_attr_noexcept;
+mi_decl_export void mi_stats_mallinfo(mallinfo_t *minfo) mi_attr_noexcept;
 
 mi_decl_export void mi_process_init(void)     mi_attr_noexcept;
 mi_decl_export void mi_thread_init(void)      mi_attr_noexcept;
@@ -160,6 +170,13 @@ mi_decl_export void mi_thread_stats_print_out(mi_output_fun* out, void* arg) mi_
 mi_decl_export void mi_process_info(size_t* elapsed_msecs, size_t* user_msecs, size_t* system_msecs, 
                                     size_t* current_rss, size_t* peak_rss, 
                                     size_t* current_commit, size_t* peak_commit, size_t* page_faults) mi_attr_noexcept;
+
+// ------------------------------------------------------
+//  Backward compability with jemalloc
+// ------------------------------------------------------
+
+mi_decl_export void mi_malloc_stats_print(void (*write_cb) (void *, const char *), void *cbopaque, const char *opts)  mi_attr_noexcept;
+mi_decl_export int mi_malloc_info(int options, FILE* fp) mi_attr_noexcept;
 
 // -------------------------------------------------------------------------------------
 // Aligned allocation
@@ -248,6 +265,9 @@ mi_decl_nodiscard mi_decl_export void* mi_heap_recalloc_aligned_at(mi_heap_t* he
 mi_decl_export bool mi_heap_contains_block(mi_heap_t* heap, const void* p);
 mi_decl_export bool mi_heap_check_owned(mi_heap_t* heap, const void* p);
 mi_decl_export bool mi_check_owned(const void* p);
+mi_decl_export int  mi_malloc_iterate(void* base, size_t size, void (*callback)(void* base, size_t size, void* arg), void* arg);
+mi_decl_export void mi_malloc_disable(void);
+mi_decl_export void mi_malloc_enable(void);
 
 // An area of heap space contains blocks of a single size.
 typedef struct mi_heap_area_s {

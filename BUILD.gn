@@ -23,7 +23,9 @@ config("libmimalloc_config") {
     "-pipe",
     "-DMI_DEBUG=0",
     "-Wno-unsupported-floating-point-opt",
-    "-Wno-bitwise-op-parentheses"
+    "-Wno-bitwise-op-parentheses",
+    "-DMI_DEBUG=0",
+    "-DMI_STAT=2"
   ]
 }
 
@@ -43,6 +45,7 @@ ohos_shared_library("libmimalloc_shared") {
       "MI_SHARED_LIB",
       "MI_SHARED_LIB_EXPORT",
       "MI_TLS_PTHREAD",
+      "__OHOS__",
       "mimalloc_EXPORTS"
   ]
 
@@ -62,6 +65,7 @@ ohos_static_library("libmimalloc_static") {
 
   defines = [
     "MI_TLS_PTHREAD",
+    "__OHOS__",
     "mimalloc_EXPORTS"
   ]
 

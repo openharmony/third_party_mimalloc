@@ -11,6 +11,7 @@ terms of the MIT license. A copy of the license can be found in the file
   exported is `mi_malloc_generic`.
 ----------------------------------------------------------- */
 
+#include <stdbool.h>
 #include "mimalloc.h"
 #include "mimalloc-internal.h"
 #include "mimalloc-atomic.h"
@@ -27,6 +28,53 @@ terms of the MIT license. A copy of the license can be found in the file
 /* -----------------------------------------------------------
   Page helpers
 ----------------------------------------------------------- */
+
+static mi_decl_cache_align _Atomic(bool) lock_detached_page_queue; // = 0
+mi_detached_page_queue_t                 detached_page_queue;      // = NULL
+
+void _mi_page_lock_detached_page_queue(void) {
+  bool locked = false;
+  while (!mi_atomic_cas_weak_acq_rel(&lock_detached_page_queue, &locked, true))
+  {
+    mi_atomic_yield();
+    locked = false;
+  }
+}
+
+void _mi_page_unlock_detached_page_queue(void) {
+  mi_atomic_store_release(&lock_detached_page_queue, false);
+}
+
+void _mi_page_add_detached_page(mi_page_t* page) {
+  _mi_page_lock_detached_page_queue();
+  size_t block_size = _mi_os_good_alloc_size(page->xblock_size);
+  mi_assert_internal(mi_bin(block_size) == MI_BIN_HUGE);
+
+  if (detached_page_queue.last == NULL) {
+    mi_assert_internal(detached_page_queue.first == NULL);
+    detached_page_queue.first = page;
+    detached_page_queue.last = page;
+  } else {
+    mi_assert_internal(detached_page_queue.last != NULL);
+    mi_assert_internal(detached_page_queue.first != NULL);
+    detached_page_queue.last->next = page;
+    page->prev = detached_page_queue.last;
+    detached_page_queue.last = page;
+  }
+  _mi_page_unlock_detached_page_queue();
+}
+
+void _mi_page_remove_detached_page(mi_page_t* page) {
+  _mi_page_lock_detached_page_queue();
+  if (page->prev != NULL) page->prev->next = page->next;
+  if (page->next != NULL) page->next->prev = page->prev;
+  if (page == detached_page_queue.last)  detached_page_queue.last = page->prev;
+  if (page == detached_page_queue.first) detached_page_queue.first = page->next;
+
+  page->prev = NULL;
+  page->next = NULL;
+  _mi_page_unlock_detached_page_queue();
+}
 
 // Index a block in a page
 static inline mi_block_t* mi_page_block_at(const mi_page_t* page, void* page_start, size_t block_size, size_t i) {
@@ -788,6 +836,7 @@ static mi_page_t* mi_large_huge_page_alloc(mi_heap_t* heap, size_t size) {
       mi_assert_internal(_mi_page_segment(page)->used==1);
       mi_assert_internal(_mi_page_segment(page)->thread_id==0); // abandoned, not in the huge queue
       mi_page_set_heap(page, NULL);
+      _mi_page_add_detached_page(page);
     }
     else {
       mi_assert_internal(_mi_page_segment(page)->kind != MI_SEGMENT_HUGE);

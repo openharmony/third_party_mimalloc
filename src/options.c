@@ -98,10 +98,16 @@ static mi_option_desc_t options[_mi_option_last] =
 };
 
 static void mi_option_init(mi_option_desc_t* desc);
+#if defined(MI_TLS_PTHREAD)
+static void mi_recurse_key_init();
+#endif
 
 void _mi_options_init(void) {
   // called on process load; should not be called before the CRT is initialized!
   // (e.g. do not call this from process_init as that may run before CRT initialization)
+#if defined(MI_TLS_PTHREAD)
+  mi_recurse_key_init();
+#endif
   mi_add_stderr_output(); // now it safe to use stderr for output
   for(int i = 0; i < _mi_option_last; i++ ) {
     mi_option_t option = (mi_option_t)i;
@@ -285,16 +291,34 @@ static _Atomic(size_t) warning_count; // = 0;  // when >= max_warning_count stop
 // variables on demand. This is why we use a _mi_preloading test on such
 // platforms. However, C code generator may move the initial thread local address
 // load before the `if` and we therefore split it out in a separate funcion.
+#if defined(MI_TLS_PTHREAD)
+static pthread_key_t recurse_key = (pthread_key_t)(-1);
+static void mi_recurse_key_init() {
+  mi_assert_internal(recurse_key == (pthread_key_t)(-1));
+  pthread_key_create(&recurse_key, 0);
+}
+#else
 static mi_decl_thread bool recurse = false;
+#endif
 
 static mi_decl_noinline bool mi_recurse_enter_prim(void) {
+#if defined(MI_TLS_PTHREAD)
+  void* key_value = pthread_getspecific(recurse_key);
+  if ((int)key_value == 1) return false;
+  pthread_setspecific(recurse_key, (void*)(1));
+#else
   if (recurse) return false;
   recurse = true;
+#endif
   return true;
 }
 
 static mi_decl_noinline void mi_recurse_exit_prim(void) {
+#if defined(MI_TLS_PTHREAD)
+  pthread_setspecific(recurse_key, (void*)(0));
+#else
   recurse = false;
+#endif
 }
 
 static bool mi_recurse_enter(void) {

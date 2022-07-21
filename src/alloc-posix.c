@@ -72,7 +72,10 @@ mi_decl_nodiscard mi_decl_restrict void* mi_memalign(size_t alignment, size_t si
 }
 
 mi_decl_nodiscard mi_decl_restrict void* mi_valloc(size_t size) mi_attr_noexcept {
-  return mi_memalign( _mi_os_page_size(), size );
+  _mi_heap_lock_malloc();
+  void* res =  mi_memalign( _mi_os_page_size(), size);
+  _mi_heap_unlock_malloc();
+  return res;
 }
 
 mi_decl_nodiscard mi_decl_restrict void* mi_pvalloc(size_t size) mi_attr_noexcept {

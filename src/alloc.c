@@ -116,7 +116,10 @@ extern inline mi_decl_restrict void* mi_heap_malloc(mi_heap_t* heap, size_t size
 }
 
 extern inline mi_decl_restrict void* mi_malloc(size_t size) mi_attr_noexcept {
-  return mi_heap_malloc(mi_get_default_heap(), size);
+  _mi_heap_lock_malloc();
+  void* res = mi_heap_malloc(mi_get_default_heap(), size);
+  _mi_heap_unlock_malloc();
+  return res;
 }
 
 
@@ -362,6 +365,7 @@ static mi_decl_noinline void _mi_free_block_mt(mi_page_t* page, mi_block_t* bloc
   mi_segment_t* segment = _mi_page_segment(page);
   if (segment->kind==MI_SEGMENT_HUGE) {
     mi_stat_huge_free(page);
+    _mi_page_remove_detached_page(page);
     _mi_segment_huge_page_free(segment, page, block);
     return;
   }
@@ -483,7 +487,7 @@ static inline mi_segment_t* mi_checked_ptr_segment(const void* p, const char* ms
 }
 
 // Free a block 
-void mi_free(void* p) mi_attr_noexcept
+void mi_free_internal(void* p) mi_attr_noexcept
 {
   mi_segment_t* const segment = mi_checked_ptr_segment(p,"mi_free");
   if (mi_unlikely(segment == NULL)) return; 
@@ -511,6 +515,13 @@ void mi_free(void* p) mi_attr_noexcept
     // note: recalc page in generic to improve code generation
     mi_free_generic(segment, tid == segment->thread_id, p);
   }
+}
+
+void mi_free(void* p) mi_attr_noexcept
+{
+  _mi_heap_lock_malloc();
+  mi_free_internal(p);
+  _mi_heap_unlock_malloc();
 }
 
 bool _mi_free_delayed_block(mi_block_t* block) {
@@ -609,7 +620,10 @@ extern inline mi_decl_restrict void* mi_heap_calloc(mi_heap_t* heap, size_t coun
 }
 
 mi_decl_restrict void* mi_calloc(size_t count, size_t size) mi_attr_noexcept {
-  return mi_heap_calloc(mi_get_default_heap(),count,size);
+  _mi_heap_lock_malloc();
+  void* res = mi_heap_calloc(mi_get_default_heap(),count,size);
+  _mi_heap_unlock_malloc();
+  return res;
 }
 
 // Uninitialized `calloc`
@@ -688,7 +702,10 @@ void* mi_heap_recalloc(mi_heap_t* heap, void* p, size_t count, size_t size) mi_a
 
 
 void* mi_realloc(void* p, size_t newsize) mi_attr_noexcept {
-  return mi_heap_realloc(mi_get_default_heap(),p,newsize);
+  _mi_heap_lock_malloc();
+  void* res = mi_heap_realloc(mi_get_default_heap(),p,newsize);
+  _mi_heap_unlock_malloc();
+  return res;
 }
 
 void* mi_reallocn(void* p, size_t count, size_t size) mi_attr_noexcept {
@@ -836,7 +853,7 @@ static bool mi_try_new_handler(bool nothrow) {
 typedef void (*std_new_handler_t)(void);
 
 #if (defined(__GNUC__) || defined(__clang__))
-std_new_handler_t __attribute((weak)) _ZSt15get_new_handlerv(void) {
+std_new_handler_t __attribute((__weak__)) _ZSt15get_new_handlerv(void) {
   return NULL;
 }
 static std_new_handler_t mi_get_new_handler(void) {
