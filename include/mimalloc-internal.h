@@ -71,6 +71,8 @@ extern mi_decl_cache_align const mi_page_t  _mi_page_empty;
 bool       _mi_is_main_thread(void);
 size_t     _mi_current_thread_count(void);
 bool       _mi_preloading(void);  // true while the C runtime is not ready
+void       _mi_heap_lock_heap_queue(void);
+void       _mi_heap_unlock_heap_queue(void);
 
 // os.c
 size_t     _mi_os_page_size(void);
@@ -131,6 +133,11 @@ void       _mi_deferred_free(mi_heap_t* heap, bool force);
 void       _mi_page_free_collect(mi_page_t* page,bool force);
 void       _mi_page_reclaim(mi_heap_t* heap, mi_page_t* page);   // callback from segments
 
+void       _mi_page_add_detached_page(mi_page_t* page);
+void       _mi_page_remove_detached_page(mi_page_t* page);
+void       _mi_page_lock_detached_page_queue(void);
+void       _mi_page_unlock_detached_page_queue(void);
+
 size_t     _mi_bin_size(uint8_t bin);           // for stats
 uint8_t    _mi_bin(size_t size);                // for stats
 
@@ -138,6 +145,12 @@ uint8_t    _mi_bin(size_t size);                // for stats
 void       _mi_heap_destroy_pages(mi_heap_t* heap);
 void       _mi_heap_collect_abandon(mi_heap_t* heap);
 void       _mi_heap_set_default_direct(mi_heap_t* heap);
+void       _mi_heap_lock_malloc(void);
+void       _mi_heap_unlock_malloc(void);
+void       _mi_heap_lock_iterate(void);
+void       _mi_heap_unlock_iterate(void);
+void       _mi_heap_lock_rwlock_mutex(void);
+void       _mi_heap_unlock_rwlock_mutex(void);
 
 // "stats.c"
 void       _mi_stats_done(mi_stats_t* stats);
@@ -145,6 +158,7 @@ void       _mi_stats_done(mi_stats_t* stats);
 mi_msecs_t  _mi_clock_now(void);
 mi_msecs_t  _mi_clock_end(mi_msecs_t start);
 mi_msecs_t  _mi_clock_start(void);
+mi_stats_t  _mi_stats_get_empty_stats(void);
 
 // "alloc.c"
 void*       _mi_page_malloc(mi_heap_t* heap, mi_page_t* page, size_t size) mi_attr_noexcept;  // called from `_mi_malloc_generic`
@@ -367,7 +381,9 @@ extern pthread_key_t _mi_heap_default_key;
 // Do not use this directly but use through `mi_heap_get_default()` (or the unchecked `mi_get_default_heap`).
 // This thread local variable is only used when neither MI_TLS_SLOT, MI_TLS_PTHREAD, or MI_TLS_PTHREAD_SLOT_OFS are defined.
 // However, on the Apple M1 we do use the address of this variable as the unique thread-id (issue #356).
+#if !defined(__OHOS__) && !defined(MI_TLS_PTHREAD)
 extern mi_decl_thread mi_heap_t* _mi_heap_default;  // default heap to allocate from
+#endif
 
 static inline mi_heap_t* mi_get_default_heap(void) {
 #if defined(MI_TLS_SLOT)
@@ -734,6 +750,7 @@ static inline bool mi_commit_mask_is_full(const mi_commit_mask_t* cm) {
 // defined in `segment.c`:
 size_t _mi_commit_mask_committed_size(const mi_commit_mask_t* cm, size_t total);
 size_t _mi_commit_mask_next_run(const mi_commit_mask_t* cm, size_t* idx);
+void mi_segment_walk_through_abandoned_segments(mi_iterate_info_t* iterate_info);
 
 #define mi_commit_mask_foreach(cm,idx,count) \
   idx = 0; \
@@ -879,6 +896,12 @@ static inline mi_threadid_t _mi_thread_id(void) mi_attr_noexcept {
     // apple: https://github.com/apple/darwin-xnu/blob/main/libsyscall/os/tsd.h#L36
     return (uintptr_t)mi_tls_slot(0);
   #endif
+}
+
+#elif defined(__OHOS__) && defined(MI_TLS_PTHREAD)
+
+static inline mi_threadid_t _mi_thread_id(void) mi_attr_noexcept {
+  return (mi_threadid_t)pthread_self();
 }
 
 #else
