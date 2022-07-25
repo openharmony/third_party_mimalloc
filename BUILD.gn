@@ -21,7 +21,6 @@ config("libmimalloc_config") {
     "-fomit-frame-pointer",
     "-frounding-math",
     "-pipe",
-    "-DMI_DEBUG=0",
     "-Wno-unsupported-floating-point-opt",
     "-Wno-bitwise-op-parentheses",
     "-DMI_DEBUG=0",
@@ -64,6 +63,7 @@ ohos_static_library("libmimalloc_static") {
   ]
 
   defines = [
+    "MI_MALLOC_OVERRIDE",
     "MI_TLS_PTHREAD",
     "__OHOS__",
     "mimalloc_EXPORTS"
