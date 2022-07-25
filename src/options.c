@@ -304,7 +304,7 @@ static mi_decl_thread bool recurse = false;
 static mi_decl_noinline bool mi_recurse_enter_prim(void) {
 #if defined(MI_TLS_PTHREAD)
   void* key_value = pthread_getspecific(recurse_key);
-  if ((int)key_value == 1) return false;
+  if (key_value == (void*)1) return false;
   pthread_setspecific(recurse_key, (void*)(1));
 #else
   if (recurse) return false;
