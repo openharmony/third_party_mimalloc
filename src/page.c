@@ -47,8 +47,6 @@ void _mi_page_unlock_detached_page_queue(void) {
 
 void _mi_page_add_detached_page(mi_page_t* page) {
   _mi_page_lock_detached_page_queue();
-  size_t block_size = _mi_os_good_alloc_size(page->xblock_size);
-  mi_assert_internal(mi_bin(block_size) == MI_BIN_HUGE);
 
   if (detached_page_queue.last == NULL) {
     mi_assert_internal(detached_page_queue.first == NULL);
