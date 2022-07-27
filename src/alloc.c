@@ -949,3 +949,35 @@ void* mi_new_reallocn(void* p, size_t newcount, size_t size) {
     return mi_new_realloc(p, total);
   }
 }
+
+#define cap_max(x, MAX_VALUE) ((x > MAX_VALUE) ? MAX_VALUE : x)
+#define cap(x) cap_max(x, INT_MAX)
+#define cap2(x) cap_max(x, SIZE_MAX)
+
+struct mallinfo mi_mallinfo() {
+  struct mallinfo mi = {0};
+  struct mallinfo_s mi_mallinfo = {0};
+
+  mi_stats_mallinfo(&mi_mallinfo);
+
+  mi.hblks = cap(mi_mallinfo.mmap_calls);
+  mi.hblkhd = cap(mi_mallinfo.reserved);
+  mi.uordblks = cap(mi_mallinfo.allocated);
+  mi.fordblks = cap(mi_mallinfo.freed);
+
+  return mi;
+}
+
+struct mallinfo2 mi_mallinfo2(void) {
+  struct mallinfo2 mi2 = {0};
+  struct mallinfo_s mi_mallinfo = {0};
+
+  mi_stats_mallinfo(&mi_mallinfo);
+
+  mi2.hblks = cap(mi_mallinfo.mmap_calls);
+  mi2.hblkhd = cap(mi_mallinfo.reserved);
+  mi2.uordblks = cap(mi_mallinfo.allocated);
+  mi2.fordblks = cap(mi_mallinfo.freed);
+
+  return mi2;
+}

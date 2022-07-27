@@ -147,6 +147,32 @@ mi_decl_export void mi_register_output(mi_output_fun* out, void* arg) mi_attr_no
 typedef void (mi_cdecl mi_error_fun)(int err, void* arg);
 mi_decl_export void mi_register_error(mi_error_fun* fun, void* arg);
 
+struct mallinfo {
+  int arena;     /* Non-mmapped space allocated (bytes) */
+  int ordblks;   /* Number of free chunks */
+  int smblks;    /* Number of free fastbin blocks */
+  int hblks;     /* Number of mmapped regions */
+  int hblkhd;    /* Space allocated in mmapped regions (bytes) */
+  int usmblks;   /* Maximum total allocated space (bytes) */
+  int fsmblks;   /* Space in freed fastbin blocks (bytes) */
+  int uordblks;  /* Total allocated space (bytes) */
+  int fordblks;  /* Total free space (bytes) */
+  int keepcost;  /* Top-most, releasable space (bytes) */
+};
+
+struct mallinfo2 {
+  size_t arena;
+  size_t ordblks;
+  size_t smblks;
+  size_t hblks;
+  size_t hblkhd;
+  size_t usmblks;
+  size_t fsmblks;
+  size_t uordblks;
+  size_t fordblks;
+  size_t keepcost;
+};
+
 typedef struct mallinfo_s {
   uint64_t mmap_calls;
   uint64_t reserved;
@@ -268,6 +294,8 @@ mi_decl_export bool mi_check_owned(const void* p);
 mi_decl_export int  mi_malloc_iterate(void* base, size_t size, void (*callback)(void* base, size_t size, void* arg), void* arg);
 mi_decl_export void mi_malloc_disable(void);
 mi_decl_export void mi_malloc_enable(void);
+mi_decl_export struct mallinfo mi_mallinfo(void);
+mi_decl_export struct mallinfo2 mi_mallinfo2(void);
 
 // An area of heap space contains blocks of a single size.
 typedef struct mi_heap_area_s {
