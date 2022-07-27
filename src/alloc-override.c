@@ -127,6 +127,8 @@ typedef struct mi_nothrow_s { int _tag; } mi_nothrow_t;
   void* calloc(size_t size, size_t n)    MI_FORWARD2(mi_calloc, size, n)
   void* realloc(void* p, size_t newsize) MI_FORWARD2(mi_realloc, p, newsize)
   void  free(void* p)                    MI_FORWARD0(mi_free, p)
+  struct mallinfo mallinfo(void)         MI_FORWARD(mi_mallinfo)
+  struct mallinfo2 mallinfo2(void)         MI_FORWARD(mi_mallinfo2)
 #endif
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__APPLE__)

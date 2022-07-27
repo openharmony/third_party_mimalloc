@@ -72,3 +72,10 @@ ohos_static_library("libmimalloc_static") {
   subsystem_name = "thirdparty"
   part_name = "mimalloc"
 }
+
+group("mimalloc_test") {
+  testonly = true
+  deps = [
+    "test:mimalloc_test"
+  ]
+}
