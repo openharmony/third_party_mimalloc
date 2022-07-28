@@ -51,6 +51,14 @@ mimalloc_unittest("test-stats-print") {
 
 }
 
+mimalloc_unittest("test-mallinfo2") {
+
+}
+
+mimalloc_unittest("test-mallopt") {
+
+}
+
 mimalloc_unittest("test-malloc_iterate") {
   use_exceptions = true
 
