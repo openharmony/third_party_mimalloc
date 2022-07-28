@@ -84,7 +84,7 @@ int main(void) {
     memset(stderr_buffer, 0, BUFFER_SIZE);
   });
   CHECK_BODY("mi_malloc_stats_print-buffer-callback", {
-    result = test_callback_stats;
+    result = test_callback_stats();
   });
   CHECK_BODY("mi_malloc_stats_print-thread-safety", {
     result = test_parallel_stats();

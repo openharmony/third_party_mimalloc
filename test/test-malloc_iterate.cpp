@@ -95,10 +95,10 @@ template <std::size_t C>
 static bool verify_ptrs_disabled_sync(TestDataType<C>* test_data, Barrier&);
 
 template <std::size_t C>
-static bool free_ptrs(TestDataType<C>* test_data);
+static void free_ptrs(TestDataType<C>* test_data);
 
 template <std::size_t C>
-static bool alloc_ptr(TestDataType<C>* test_data, size_t size, const std::function<void *(size_t)>& alloc_func);
+static void alloc_ptr(TestDataType<C>* test_data, size_t size, const std::function<void *(size_t)>& alloc_func);
 
 template<typename... T>
 static constexpr auto make_array(T &&... values) noexcept ->
@@ -146,7 +146,7 @@ struct get_non_default_heap_alloc : public AllocGetter {
   }
 
   std::function<void *(size_t)> operator()() override {
-    return [] (size_t size) {
+    return [this] (size_t size) {
       return mi_heap_malloc(heap, size); 
     };
   }
@@ -162,7 +162,7 @@ static bool test_simple_allocations_base(const std::array<T, N>& sizes) {
   Getter getter;
   allocate_sizes(&test_data, sizes, getter());
   ret = verify_ptrs_enabled(&test_data);
-  free(&test_data);
+  free_ptrs(&test_data);
   
   return ret;
 }
@@ -425,4 +425,101 @@ int main() {
   // Done
   // ---------------------------------------------------[]
   return print_test_summary();
+}
+
+template <std::size_t C>
+void alloc_ptr(TestDataType<C>* test_data, size_t size, const std::function<void *(size_t)>& alloc_func) {
+  void* ptr = alloc_func(size);
+  assert(ptr != nullptr);
+  AllocDataType alloc{ptr, mi_malloc_usable_size(ptr), 0, 0};
+  test_data->alloc.push_back(alloc);
+}
+
+template <typename T, std::size_t N, std::size_t C>
+void allocate_sizes(TestDataType<C>* test_data, const std::array<T, N>& sizes, const std::function<void *(size_t)>& alloc_func) {
+
+  for (size_t size : sizes) {
+    for (size_t i = 0; i < kInitialAllocations; i++) {
+      void* ptr = mi_malloc(size);
+      assert(ptr != nullptr);
+      memset(ptr, 0, size);
+      mi_free(ptr);
+    }
+    for (size_t i = 0; i < kNumAllocs; i++) {
+      alloc_ptr(test_data, size, alloc_func);
+    }
+  }
+}
+
+template <std::size_t C>
+void free_ptrs(TestDataType<C>* test_data) {
+  for (auto & alloc : test_data->allocs) {
+    mi_free(alloc.ptr);
+  }
+}
+
+template <std::size_t C>
+static void save_pointers(void* base, size_t size, void* data) {
+  auto* test_data = reinterpret_cast<TestDataType<C>*>(data);
+
+  test_data->total_allocated_bytes += size;
+
+  uintptr_t end;
+  if (__builtin_add_overflow((uintptr_t)base, size, &end)) {
+    // Skip this entry
+    return;
+  }
+
+  for (auto & alloc : test_data->allocs) {
+    auto ptr = reinterpret_cast<uintptr_t>(alloc.ptr);
+    if (ptr >= (uintptr_t)base && ptr < end) {
+      alloc.count++;
+      uintptr_t max_szie = end - ptr;
+
+      alloc.size_reported = std::min(alloc.size, max_size);
+    }
+  }
+}
+
+template <std::size_t C>
+static bool verify_ptrs(TestDataType<C>* test_data, bool disable) {
+  if (disable) {
+    mi_malloc_disable();
+  }
+  bool ret = true;
+  auto &allocs = test_data->allocs;
+  auto address_cmp = [](const auto &left, const auto &right) {
+    return (uintptr_t) left.ptr < (uintptr_t) right.ptr;
+  };
+  auto min_address_element = std::min_element(allocs.begin(), allocs.end(), address_cmp);
+  auto max_address_element = std::max_element(allocs.begin(), allocs.end(), address_cmp);
+  mi_malloc_iterate(min_address_element->ptr,
+                    (uintptr_t) max_address_element->ptr - (uintptr_t) min_address_element->ptr +
+                    max_address_element->size,
+                    save_pointers<C>,
+                    test_data);
+  
+  if (disable) {
+    mi_malloc_enable();
+  }
+
+  for (auto & alloc : allocs) {
+    if (1UL != alloc.count) {
+      ret = false;
+    } else {
+      --aloc.count;
+    }
+  }
+  return ret;
+}
+
+template <std::size_t C>
+bool verify_ptrs_enabled(TestDataType<C>* test_data) {
+  return verify_ptrs(test_data, false);
+}
+
+template <std::size_t C>
+bool verify_ptrs_disabled_sync(TestDataType<C>* test_data, Barrier &barrier) {
+  barrier.wait();
+  return verify_ptrs(test_data, true);
 }
