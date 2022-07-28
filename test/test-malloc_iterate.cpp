@@ -432,7 +432,7 @@ void alloc_ptr(TestDataType<C>* test_data, size_t size, const std::function<void
   void* ptr = alloc_func(size);
   assert(ptr != nullptr);
   AllocDataType alloc{ptr, mi_malloc_usable_size(ptr), 0, 0};
-  test_data->alloc.push_back(alloc);
+  test_data->allocs.push_back(alloc);
 }
 
 template <typename T, std::size_t N, std::size_t C>
@@ -474,7 +474,7 @@ static void save_pointers(void* base, size_t size, void* data) {
     auto ptr = reinterpret_cast<uintptr_t>(alloc.ptr);
     if (ptr >= (uintptr_t)base && ptr < end) {
       alloc.count++;
-      uintptr_t max_szie = end - ptr;
+      uintptr_t max_size = end - ptr;
 
       alloc.size_reported = std::min(alloc.size, max_size);
     }
@@ -507,7 +507,7 @@ static bool verify_ptrs(TestDataType<C>* test_data, bool disable) {
     if (1UL != alloc.count) {
       ret = false;
     } else {
-      --aloc.count;
+      --alloc.count;
     }
   }
   return ret;
