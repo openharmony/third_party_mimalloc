@@ -1,21 +1,15 @@
-/*----------------------------------------------------------------------------
-Copyright (c) 2022, Huawei Device Co., Ltd.
-This is free software; you can redistribute it and/or modify it under the
-terms of the MIT license. A copy of the license can be found in the file
-"LICENSE" at the root of this distribution.
------------------------------------------------------------------------------*/
-
 #include <stdbool.h>
 #include <unistd.h>
 #include <memory.h>
 #include <pthread.h>
+#include <stdio.h>
 
 #include "mimalloc.h"
 #include "mimalloc-types.h" // for MI_DEBUG
 #include "testhelper.h"
 
 #define CONCURRENT_THREADS_COUNT 2
-#define BARRIERS_COUNT 3
+#define BARRIERS_COUNT 4
 #define BUFFER_SIZE 8192
 
 char stderr_buffer[BUFFER_SIZE];
@@ -64,36 +58,30 @@ bool test_callback_stats(void);
 bool test_parallel_stats(void);
 bool test_merged_stats(void);
 
+bool stats_print_to_buffer(char *buffer);
+
 // ---------------------------------------------------------------------------
 // Main testing
 // ---------------------------------------------------------------------------
 int main(void) {
   mi_option_disable(mi_option_verbose);
-
+  mi_stats_reset();
   // ---------------------------------------------------
   // Stats (Must be run before all other tests to preserve the initial state of allocator)
   // ---------------------------------------------------
   CHECK_BODY("mi_malloc_stats_print-initial", {
-    int stderr_fd = dup(fileno(stderr));
-    freopen("/dev/null", "a", stderr);
-    setbuf(stderr, stderr_buffer);
-    mi_malloc_stats_print(NULL, NULL, "");
+    stats_print_to_buffer(stderr_buffer);
     result = is_initial_state(stderr_buffer) == true;
     memset(stderr_buffer, 0, BUFFER_SIZE);
-    dup2(stderr_fd, fileno(stderr));
-    close(stderr_fd);
   });
   CHECK_BODY("mi_malloc_stats_print-after-use", {
-    int stderr_fd = dup(fileno(stderr));
-    freopen("/dev/null", "a", stderr);
-    setbuf(stderr, stderr_buffer);
-    int *arr = malloc(20 * sizeof(int));
-    mi_malloc_stats_print(NULL, NULL, "");
-    free(arr);
-    result = is_initial_state(stderr_buffer) == false;
+    int *arr = mi_malloc(20 * sizeof(int));
+    result &= stats_print_to_buffer(stderr_buffer);
+    mi_free(arr);
+  
+    if (result)
+      result = is_initial_state(stderr_buffer) == false;
     memset(stderr_buffer, 0, BUFFER_SIZE);
-    dup2(stderr_fd, fileno(stderr));
-    close(stderr_fd);
   });
   CHECK_BODY("mi_malloc_stats_print-buffer-callback", {
     result = test_callback_stats;
@@ -109,6 +97,23 @@ int main(void) {
   // Done
   // ---------------------------------------------------[]
   return print_test_summary();
+}
+
+bool stats_print_to_buffer(char *buffer) {
+  fflush(stderr);
+  int err_pipe[2];
+  int saved_stderr = dup(STDERR_FILENO);
+  if (pipe(err_pipe) != 0) {
+    perror("Can't create pipe");
+    return false;
+  }
+  dup2(err_pipe[1], STDERR_FILENO);
+  close(err_pipe[1]);
+  mi_malloc_stats_print(NULL, NULL, "");
+  fflush(stderr);
+  read(err_pipe[0], buffer, BUFFER_SIZE);
+  dup2(saved_stderr, STDERR_FILENO);
+  return true;
 }
 
 char *skip_whitespaces(char *token) {
@@ -156,10 +161,11 @@ bool is_initial_state(char *string) {
 void *allocate_routine(void *arg) {
   pthread_barrier_t *barriers = arg;
   pthread_barrier_wait(&barriers[0]);
-  int *arr = malloc(50 * sizeof(int));
   pthread_barrier_wait(&barriers[1]);
+  int *arr = mi_malloc(50 * sizeof(int));
   pthread_barrier_wait(&barriers[2]);
-  free(arr);
+  pthread_barrier_wait(&barriers[3]);
+  mi_free(arr);
   return NULL;
 }
 
@@ -225,18 +231,12 @@ void *stat_print_thread(void *arg) {
 
 bool test_callback_stats(void) {
   mi_malloc_stats_print(&buffer_cb, write_cb_buffer, "");
-
-  int stderr_fd = dup(fileno(stderr));
-  freopen("/dev/null", "a", stderr);
-  setbuf(stderr, stderr_buffer);
-  mi_malloc_stats_print(NULL, NULL, "");
+  stats_print_to_buffer(stderr_buffer);
 
   bool result = are_equal_stats(write_cb_buffer, stderr_buffer);
 
   memset(stderr_buffer, 0, BUFFER_SIZE);
   memset(write_cb_buffer, 0, BUFFER_SIZE);
-  dup2(stderr_fd, fileno(stderr));
-  close(stderr_fd);
   return result;  
 }
 
@@ -277,27 +277,19 @@ bool test_merged_stats() {
 
   pthread_barrier_wait(&barriers[0]);
 
-  int stderr_fd = dup(fileno(stderr));
-
-  freopen("/dev/null", "a", stderr);
-  setbuf(stderr, stderr_buffer);
-  mi_malloc_stats_print(NULL, NULL, "");
+  stats_print_to_buffer(stderr_buffer);
 
   pthread_barrier_wait(&barriers[1]);
-
-  freopen("/dev/null", "a", stderr);
-  setbuf(stderr, stderr_buffer2);
-  mi_malloc_stats_print(NULL, NULL, "");
-
   pthread_barrier_wait(&barriers[2]);
+
+  stats_print_to_buffer(stderr_buffer2);
+
+  pthread_barrier_wait(&barriers[3]);
   pthread_join(thread_id, NULL);
 
   bool result = !are_equal_stats(stderr_buffer, stderr_buffer2);
 
   memset(stderr_buffer, 0, BUFFER_SIZE);
   memset(stderr_buffer2, 0, BUFFER_SIZE);
-  dup2(stderr_fd, fileno(stderr));
-  close(stderr_fd);
-
   return result;
 }
