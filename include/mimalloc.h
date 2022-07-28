@@ -393,7 +393,7 @@ mi_decl_nodiscard mi_decl_export long mi_option_get(mi_option_t option);
 mi_decl_nodiscard mi_decl_export long mi_option_get_clamp(mi_option_t option, long min, long max);
 mi_decl_export void mi_option_set(mi_option_t option, long value);
 mi_decl_export void mi_option_set_default(mi_option_t option, long value);
-
+mi_decl_export int mi_mallopt(int param, int value);
 
 // -------------------------------------------------------------------------------------------------------
 // "mi" prefixed implementations of various posix, Unix, Windows, and C++ allocation functions.

@@ -146,6 +146,15 @@ void mi_option_set(mi_option_t option, long value) {
   desc->init = INITIALIZED;
 }
 
+int mi_mallopt(int param, int value) {
+  if (param >= mi_option_show_errors && param <= mi_option_verbose) {
+    mi_option_set((mi_option_t)param, value);
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 void mi_option_set_default(mi_option_t option, long value) {
   mi_assert(option >= 0 && option < _mi_option_last);
   if (option < 0 || option >= _mi_option_last) return;
