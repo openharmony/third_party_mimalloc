@@ -6,7 +6,7 @@
 
 #define ALLOC_NUM 100
 
-void test_mallinfo2()
+void test_mallinfo2(void)
 {
   struct mallinfo2 mi2;
 
@@ -18,7 +18,7 @@ void test_mallinfo2()
   assert(mi2.fordblks);
 }
 
-int main(int argc, char* argv[])
+int main(void)
 {
   int i;
   char* arr[ALLOC_NUM];
@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
   for (i = 0; i < ALLOC_NUM; i++) {
     arr[i] = (char*)malloc((i + 1) * 1024);
     if (arr[i] == NULL) {
-        fprint(stderr, "Failed memory allocation\n");
+        fprintf(stderr, "Failed memory allocation\n");
         exit(1);
     }
   }
