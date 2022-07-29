@@ -68,8 +68,9 @@ bool test_disable_before_realloc() {
 }
 
 bool test_disable_before_free() {
-    return base_alloc_test([]() {
-        mi_free(nullptr);
+    void *junk = mi_malloc(1);
+    return base_alloc_test([junk]() {
+        mi_free(junk);
         return std::nullopt;
     });
 }

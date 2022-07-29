@@ -33,11 +33,8 @@ static mi_decl_cache_align _Atomic(bool) lock_detached_page_queue; // = 0
 mi_detached_page_queue_t                 detached_page_queue;      // = NULL
 
 void _mi_page_lock_detached_page_queue(void) {
-  bool locked = false;
-  while (!mi_atomic_cas_weak_acq_rel(&lock_detached_page_queue, &locked, true))
-  {
+  while (mi_atomic_exchange_acq_rel(&lock_detached_page_queue, true)) {
     mi_atomic_yield();
-    locked = false;
   }
 }
 

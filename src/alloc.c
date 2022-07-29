@@ -116,9 +116,10 @@ extern inline mi_decl_restrict void* mi_heap_malloc(mi_heap_t* heap, size_t size
 }
 
 extern inline mi_decl_restrict void* mi_malloc(size_t size) mi_attr_noexcept {
-  _mi_heap_lock_malloc();
+  bool locked = _mi_heap_lock_malloc();
   void* res = mi_heap_malloc(mi_get_default_heap(), size);
-  _mi_heap_unlock_malloc();
+  if (mi_likely(locked))
+    _mi_heap_unlock_malloc();
   return res;
 }
 
@@ -519,9 +520,10 @@ void mi_free_internal(void* p) mi_attr_noexcept
 
 void mi_free(void* p) mi_attr_noexcept
 {
-  _mi_heap_lock_malloc();
+  bool locked = _mi_heap_lock_malloc();
   mi_free_internal(p);
-  _mi_heap_unlock_malloc();
+  if (mi_likely(locked))
+    _mi_heap_unlock_malloc();
 }
 
 bool _mi_free_delayed_block(mi_block_t* block) {
@@ -620,9 +622,10 @@ extern inline mi_decl_restrict void* mi_heap_calloc(mi_heap_t* heap, size_t coun
 }
 
 mi_decl_restrict void* mi_calloc(size_t count, size_t size) mi_attr_noexcept {
-  _mi_heap_lock_malloc();
+  bool locked = _mi_heap_lock_malloc();
   void* res = mi_heap_calloc(mi_get_default_heap(),count,size);
-  _mi_heap_unlock_malloc();
+  if (mi_likely(locked))
+    _mi_heap_unlock_malloc();
   return res;
 }
 
@@ -702,10 +705,7 @@ void* mi_heap_recalloc(mi_heap_t* heap, void* p, size_t count, size_t size) mi_a
 
 
 void* mi_realloc(void* p, size_t newsize) mi_attr_noexcept {
-  _mi_heap_lock_malloc();
-  void* res = mi_heap_realloc(mi_get_default_heap(),p,newsize);
-  _mi_heap_unlock_malloc();
-  return res;
+  return mi_heap_realloc(mi_get_default_heap(),p,newsize);
 }
 
 void* mi_reallocn(void* p, size_t count, size_t size) mi_attr_noexcept {

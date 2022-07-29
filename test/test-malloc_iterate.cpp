@@ -24,6 +24,8 @@
 #include "mimalloc-types.h"
 #include "barrier.hpp"
 
+using namespace std::chrono_literals;
+
 namespace {
     template <typename T, std::size_t C>
     class FixedCapacityVector {
@@ -92,7 +94,7 @@ template <std::size_t C>
 static bool verify_ptrs_enabled(TestDataType<C>* test_data);
 
 template <std::size_t C>
-static bool verify_ptrs_disabled_sync(TestDataType<C>* test_data, Barrier&);
+static bool verify_ptrs_disabled(TestDataType<C>* test_data, Barrier &barrier);
 
 template <std::size_t C>
 static void free_ptrs(TestDataType<C>* test_data);
@@ -307,7 +309,6 @@ inline bool test_multithread_abandoned_huge_allocations_non_default_heap() {
 
 template <typename Getter = get_default_heap_alloc>
 static bool test_iterate_while_disabled() {
-  using namespace std::chrono_literals;
   bool ret = false;
   TestDataType<2> test_data;
 
@@ -320,7 +321,7 @@ static bool test_iterate_while_disabled() {
   std::thread alloc_thread_fn1([&](){
     alloc_ptr(&test_data, 1, getter());
     barrier_before.wait();
-    alloc_ptr(&test_data, MI_LARGE_OBJ_SIZE_MAX, getter());
+    alloc_ptr(&test_data, MI_LARGE_OBJ_SIZE_MAX * 3, getter());
     barrier_after.wait();
     barrier_verify.wait();
   });
@@ -331,7 +332,7 @@ static bool test_iterate_while_disabled() {
 
   std::this_thread::sleep_for(1ms);
 
-  ret = verify_ptrs_disabled_sync(&test_data, barrier_after);
+  ret = verify_ptrs_disabled(&test_data, barrier_after);
   barrier_verify.wait();
   
   for(auto &t: threads){
@@ -482,9 +483,11 @@ static void save_pointers(void* base, size_t size, void* data) {
 }
 
 template <std::size_t C>
-static bool verify_ptrs(TestDataType<C>* test_data, bool disable) {
+static bool verify_ptrs(TestDataType<C>* test_data, Barrier *barrier) {
+  bool disable = barrier != nullptr;
   if (disable) {
     mi_malloc_disable();
+    std::this_thread::sleep_for(5ms);
   }
   bool ret = true;
   auto &allocs = test_data->allocs;
@@ -501,6 +504,7 @@ static bool verify_ptrs(TestDataType<C>* test_data, bool disable) {
   
   if (disable) {
     mi_malloc_enable();
+    barrier->wait();
   }
 
   for (auto & alloc : allocs) {
@@ -515,11 +519,10 @@ static bool verify_ptrs(TestDataType<C>* test_data, bool disable) {
 
 template <std::size_t C>
 bool verify_ptrs_enabled(TestDataType<C>* test_data) {
-  return verify_ptrs(test_data, false);
+  return verify_ptrs(test_data, nullptr);
 }
 
 template <std::size_t C>
-bool verify_ptrs_disabled_sync(TestDataType<C>* test_data, Barrier &barrier) {
-  barrier.wait();
-  return verify_ptrs(test_data, true);
+bool verify_ptrs_disabled(TestDataType<C>* test_data, Barrier &barrier) {
+  return verify_ptrs(test_data, &barrier);
 }

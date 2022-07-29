@@ -15,12 +15,13 @@ terms of the MIT license. A copy of the license can be found in the file
 static mi_decl_cache_align _Atomic(bool) lock_heap_queue; // = 0
 static mi_heap_t*                        heap_queue_last; // = NULL
 
+#if defined(USE_SYNCHRONIZED_ITERATE)
+extern mi_decl_cache_align _Atomic(bool) heap_init_disabled; // = 0
+#endif
+
 void _mi_heap_lock_heap_queue(void) {
-  bool locked = false;
-  while (!mi_atomic_cas_weak_acq_rel(&lock_heap_queue, &locked, true))
-  {
+  while (mi_atomic_exchange_acq_rel(&lock_heap_queue, true)) {
     mi_atomic_yield();
-    locked = false;
   }
 }
 
@@ -175,7 +176,8 @@ mi_decl_cache_align static const mi_tld_t tld_empty = {
   NULL, NULL,
   { MI_SEGMENT_SPAN_QUEUES_EMPTY, 0, 0, 0, 0, tld_empty_stats, tld_empty_os }, // segments
   { 0, tld_empty_stats }, // os
-  { MI_STATS_NULL }       // stats
+  { MI_STATS_NULL },      // stats
+  0
 };
 
 #if !defined(__OHOS__) && !defined(MI_TLS_PTHREAD)
@@ -190,7 +192,8 @@ static mi_tld_t tld_main = {
   &_mi_heap_main, & _mi_heap_main,
   { MI_SEGMENT_SPAN_QUEUES_EMPTY, 0, 0, 0, 0, &tld_main.stats, &tld_main.os }, // segments
   { 0, &tld_main.stats },  // os
-  { MI_STATS_NULL }       // stats
+  { MI_STATS_NULL },       // stats
+  0
 };
 
 mi_heap_t _mi_heap_main = {
@@ -340,6 +343,9 @@ static bool _mi_heap_init(void) {
     tld->segments.os = &tld->os;
     tld->os.stats = &tld->stats;
     _mi_heap_set_default_direct(heap);    
+#if defined(USE_SYNCHRONIZED_ITERATE)
+    while (mi_atomic_load_acquire(&heap_init_disabled)) {}
+#endif
     mi_heap_queue_push(heap);
   }
   return false;
