@@ -119,8 +119,8 @@ const auto small_sizes = make_array(
 );
 
 const auto large_sizes = make_array(
-  163840, 196608, 229376, 262144, 327680, 393216, 458752, 524228,
-  MI_MEDIUM_OBJ_SIZE_MAX + 1, MI_MEDIUM_OBJ_SIZE_MAX + 2
+  163840, 196608, 229376, 262144, 327680, 393216, 458752, 524288,
+  MI_MEDIUM_OBJ_WSIZE_MAX + 1, MI_MEDIUM_OBJ_WSIZE_MAX + 2
 );
 
 const auto huge_sizes = make_array(
