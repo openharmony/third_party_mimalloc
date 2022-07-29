@@ -15,7 +15,7 @@ terms of the MIT license. A copy of the license can be found in the file
 static mi_decl_cache_align _Atomic(bool) lock_heap_queue; // = 0
 static mi_heap_t*                        heap_queue_last; // = NULL
 
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
 extern mi_decl_cache_align _Atomic(bool) heap_init_disabled; // = 0
 #endif
 
@@ -343,7 +343,7 @@ static bool _mi_heap_init(void) {
     tld->segments.os = &tld->os;
     tld->os.stats = &tld->stats;
     _mi_heap_set_default_direct(heap);    
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
     while (mi_atomic_load_acquire(&heap_init_disabled)) {}
 #endif
     mi_heap_queue_push(heap);
