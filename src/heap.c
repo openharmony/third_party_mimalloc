@@ -653,7 +653,7 @@ bool _mi_heap_lock_malloc(void) {
   mi_common_lock(&heap->tld->malloc_disabled);
   return true;
 #endif
-  return false;
+  return true;
 }
 
 void _mi_heap_unlock_malloc(void) {

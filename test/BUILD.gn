@@ -88,7 +88,9 @@ group("mimalloc_test") {
         ":test-malloc_iterate",
         ":test-disable",
         ":test-info",
-        ":test-stress"
+        ":test-stress",
+        ":test-mallinfo2",
+        ":test-mallopt"
     ]
 }
 
