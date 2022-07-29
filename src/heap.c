@@ -15,9 +15,9 @@ terms of the MIT license. A copy of the license can be found in the file
 #pragma warning(disable:4204)  // non-constant aggregate initializer
 #endif
 
-#define DISABLED SIZE_MAX
-
-static mi_decl_cache_align _Atomic(size_t) malloc_calls; // = 0
+#if defined(USE_SYNCHRONIZED_ITERATE)
+mi_decl_cache_align _Atomic(bool) heap_init_disabled; // = 0
+#endif
 
 /* -----------------------------------------------------------
   Helpers
@@ -632,34 +632,59 @@ int mi_malloc_iterate(void* base, size_t size, void (*callback)(void* base, size
   return 0;
 }
 
-void _mi_heap_lock_malloc(void) {
-  while (true) {
-    size_t prev_count = mi_atomic_load_acquire(&malloc_calls);
-    if (mi_likely(prev_count != DISABLED)) {
-      if (mi_atomic_cas_weak_acq_rel(&malloc_calls, &prev_count, prev_count + 1)) {
-        return;
-      }
-    }
+#if defined(USE_SYNCHRONIZED_ITERATE)
+static inline void mi_common_lock(_Atomic(bool) *flag) {
+  while (mi_atomic_exchange_acq_rel(flag, true)) {
+    mi_atomic_yield();
   }
+}
+
+static inline void mi_common_unlock(_Atomic(bool) *flag) {
+  mi_atomic_store_release(flag, false);
+}
+#endif
+
+
+bool _mi_heap_lock_malloc(void) {
+#if defined(USE_SYNCHRONIZED_ITERATE)
+  mi_heap_t *heap = mi_get_default_heap();
+  if (mi_unlikely(heap == NULL || heap->tld == NULL))
+    return false;
+  mi_common_lock(&heap->tld->malloc_disabled);
+  return true;
+#endif
 }
 
 void _mi_heap_unlock_malloc(void) {
-  mi_atomic_decrement_acq_rel(&malloc_calls);
+#if defined(USE_SYNCHRONIZED_ITERATE)
+  mi_heap_t *heap = mi_get_default_heap();
+  if (mi_likely(heap != NULL && heap->tld != NULL))
+    mi_common_unlock(&heap->tld->malloc_disabled);
+#endif
 }
 
 void _mi_heap_lock_iterate(void) {
-  while (true) {
-    size_t prev_count = mi_atomic_load_acquire(&malloc_calls);
-    if (prev_count == 0) {
-      if (mi_atomic_cas_weak_acq_rel(&malloc_calls, &prev_count, DISABLED)) {
-        return;
-      }
-    }
+#if defined(USE_SYNCHRONIZED_ITERATE)
+  mi_common_lock(&heap_init_disabled);
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    if (heap->tld != NULL)
+      mi_common_lock(&heap->tld->malloc_disabled);
+    heap = heap->next_thread_heap;
   }
+#endif
 }
 
 void _mi_heap_unlock_iterate(void) {
-  mi_atomic_store_release(&malloc_calls, 0);
+#if defined(USE_SYNCHRONIZED_ITERATE)
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    if (heap->tld != NULL)
+      mi_common_unlock(&heap->tld->malloc_disabled);
+    heap = heap->next_thread_heap;
+  }
+  mi_common_unlock(&heap_init_disabled);
+#endif
 }
 
 void mi_malloc_disable(void) {

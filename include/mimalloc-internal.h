@@ -145,12 +145,10 @@ uint8_t    _mi_bin(size_t size);                // for stats
 void       _mi_heap_destroy_pages(mi_heap_t* heap);
 void       _mi_heap_collect_abandon(mi_heap_t* heap);
 void       _mi_heap_set_default_direct(mi_heap_t* heap);
-void       _mi_heap_lock_malloc(void);
+bool       _mi_heap_lock_malloc(void);
 void       _mi_heap_unlock_malloc(void);
 void       _mi_heap_lock_iterate(void);
 void       _mi_heap_unlock_iterate(void);
-void       _mi_heap_lock_rwlock_mutex(void);
-void       _mi_heap_unlock_rwlock_mutex(void);
 
 // "stats.c"
 void       _mi_stats_done(mi_stats_t* stats);

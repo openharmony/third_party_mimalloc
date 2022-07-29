@@ -605,13 +605,14 @@ typedef struct mi_segments_tld_s {
 
 // Thread local data
 struct mi_tld_s {
-  unsigned long long  heartbeat;     // monotonic heartbeat count
-  bool                recurse;       // true if deferred was called; used to prevent infinite recursion.
-  mi_heap_t*          heap_backing;  // backing heap of this thread (cannot be deleted)
-  mi_heap_t*          heaps;         // list of heaps in this thread (so we can abandon all when the thread terminates)
-  mi_segments_tld_t   segments;      // segment tld
-  mi_os_tld_t         os;            // os tld
-  mi_stats_t          stats;         // statistics
+  unsigned long long  heartbeat;        // monotonic heartbeat count
+  bool                recurse;          // true if deferred was called; used to prevent infinite recursion.
+  mi_heap_t*          heap_backing;     // backing heap of this thread (cannot be deleted)
+  mi_heap_t*          heaps;            // list of heaps in this thread (so we can abandon all when the thread terminates)
+  mi_segments_tld_t   segments;         // segment tld
+  mi_os_tld_t         os;               // os tld
+  mi_stats_t          stats;            // statistics
+  _Atomic(bool)       malloc_disabled;  // lock allocator when mi_malloc_disable() was called
 };
 
 #endif
