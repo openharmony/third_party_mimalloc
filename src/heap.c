@@ -15,7 +15,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #pragma warning(disable:4204)  // non-constant aggregate initializer
 #endif
 
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
 mi_decl_cache_align _Atomic(bool) heap_init_disabled; // = 0
 #endif
 
@@ -632,7 +632,7 @@ int mi_malloc_iterate(void* base, size_t size, void (*callback)(void* base, size
   return 0;
 }
 
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
 static inline void mi_common_lock(_Atomic(bool) *flag) {
   while (mi_atomic_exchange_acq_rel(flag, true)) {
     mi_atomic_yield();
@@ -646,17 +646,18 @@ static inline void mi_common_unlock(_Atomic(bool) *flag) {
 
 
 bool _mi_heap_lock_malloc(void) {
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
   mi_heap_t *heap = mi_get_default_heap();
   if (mi_unlikely(heap == NULL || heap->tld == NULL))
     return false;
   mi_common_lock(&heap->tld->malloc_disabled);
   return true;
 #endif
+  return false;
 }
 
 void _mi_heap_unlock_malloc(void) {
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
   mi_heap_t *heap = mi_get_default_heap();
   if (mi_likely(heap != NULL && heap->tld != NULL))
     mi_common_unlock(&heap->tld->malloc_disabled);
@@ -664,7 +665,7 @@ void _mi_heap_unlock_malloc(void) {
 }
 
 void _mi_heap_lock_iterate(void) {
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
   mi_common_lock(&heap_init_disabled);
   mi_heap_t* heap = _mi_heap_main_get();
   while (heap != NULL) {
@@ -676,7 +677,7 @@ void _mi_heap_lock_iterate(void) {
 }
 
 void _mi_heap_unlock_iterate(void) {
-#if defined(USE_SYNCHRONIZED_ITERATE)
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
   mi_heap_t* heap = _mi_heap_main_get();
   while (heap != NULL) {
     if (heap->tld != NULL)
