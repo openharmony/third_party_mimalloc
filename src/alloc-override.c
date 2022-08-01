@@ -129,7 +129,7 @@ typedef struct mi_nothrow_s { int _tag; } mi_nothrow_t;
   void* realloc(void* p, size_t newsize) MI_FORWARD2(mi_realloc, p, newsize)
   void  free(void* p)                    MI_FORWARD0(mi_free, p)
   void malloc_stats_print(void (*write_cb) (void*, const char*), void* cbopaque, const char* opts) MI_FORWARD3(mi_malloc_stats_print, write_cb, cbopaque, opts)
-  int malloc_iterate(void* base, size_t size, void (*callback)(void* base, size_t size, void* arg) MI_FORWARD4(mi_malloc_iterate, base, size, callback, arg)
+  int malloc_iterate(void* base, size_t size, void (*callback)(void* base, size_t size, void* arg), void* arg) MI_FORWARD4(mi_malloc_iterate, base, size, callback, arg)
   void malloc_disable(void)              MI_FORWARD(mi_malloc_disable)
   void malloc_enable(void)               MI_FORWARD(mi_malloc_enable)
   struct mallinfo mallinfo(void)         MI_FORWARD(mi_mallinfo)
