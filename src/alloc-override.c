@@ -40,6 +40,7 @@ typedef struct mi_nothrow_s { int _tag; } mi_nothrow_t;
   #define MI_FORWARD1(fun,x)      MI_FORWARD(fun)
   #define MI_FORWARD2(fun,x,y)    MI_FORWARD(fun)
   #define MI_FORWARD3(fun,x,y,z)  MI_FORWARD(fun)
+  #define MI_FORWARD4(fun,w,x,y,z)  MI_FORWARD(fun)
   #define MI_FORWARD0(fun,x)      MI_FORWARD(fun)
   #define MI_FORWARD02(fun,x,y)   MI_FORWARD(fun)
 #else
@@ -127,9 +128,14 @@ typedef struct mi_nothrow_s { int _tag; } mi_nothrow_t;
   void* calloc(size_t size, size_t n)    MI_FORWARD2(mi_calloc, size, n)
   void* realloc(void* p, size_t newsize) MI_FORWARD2(mi_realloc, p, newsize)
   void  free(void* p)                    MI_FORWARD0(mi_free, p)
+  void malloc_stats_print(void (*write_cb) (void*, const char*), void* cbopaque, const char* opts) MI_FORWARD3(mi_malloc_stats_print, write_cb, cbopaque, opts)
+  int malloc_iterate(void* base, size_t size, void (*callback)(void* base, size_t size, void* arg) MI_FORWARD4(mi_malloc_iterate, base, size, callback, arg)
+  void malloc_disable(void)              MI_FORWARD(mi_malloc_disable)
+  void malloc_enable(void)               MI_FORWARD(mi_malloc_enable)
   struct mallinfo mallinfo(void)         MI_FORWARD(mi_mallinfo)
   struct mallinfo2 mallinfo2(void)       MI_FORWARD(mi_mallinfo2)
-  int mallopt(int param, int value)      MI_FORWARD(mi_mallopt)
+  int mallopt(int param, int value)      MI_FORWARD2(mi_mallopt, param, value)
+  int malloc_info(int options, FILE* fp) MI_FORWARD2(mi_malloc_info, options, fp)
 #endif
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__APPLE__)
