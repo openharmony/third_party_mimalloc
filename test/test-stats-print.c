@@ -78,7 +78,7 @@ int main(void) {
     int *arr = mi_malloc(20 * sizeof(int));
     result &= stats_print_to_buffer(stderr_buffer);
     mi_free(arr);
-  
+
     if (result)
       result = is_initial_state(stderr_buffer) == false;
     memset(stderr_buffer, 0, BUFFER_SIZE);
@@ -89,7 +89,7 @@ int main(void) {
   CHECK_BODY("mi_malloc_stats_print-thread-safety", {
     result = test_parallel_stats();
   });
-  CHECK_BODY("mi_malloc_stats_print-thread-safety", {
+  CHECK_BODY("mi_malloc_stats_print-stats-from-another-thread", {
     result = test_merged_stats();
   });
 

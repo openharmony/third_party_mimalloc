@@ -30,7 +30,7 @@ template("mimalloc_unittest") {
     }
 
     if (defined(invoker.include_dirs)) {
-        include_dirs += invoker.include_dirs
+      include_dirs += invoker.include_dirs
     }
   }
 }
@@ -66,17 +66,17 @@ mimalloc_unittest("test-malloc_iterate") {
 }
 
 mimalloc_unittest("test-disable") {
-    use_exceptions = true
+  use_exceptions = true
 
-    sources = [ "test-disable.cpp" ]
+  sources = [ "test-disable.cpp" ]
 }
 
 mimalloc_unittest("test-info") {
-    include_dirs = [ "//third_party/libxml2/include" ]
+  include_dirs = [ "//third_party/libxml2/include" ]
 
-    lib_dirs = [ "${root_out_dir}/thirdparty/libxml2" ]
+  lib_dirs = [ "${root_out_dir}/thirdparty/libxml2" ]
 
-    libs = [ "xml2.z" ]
+  libs = [ "xml2.z" ]
 }
 
 group("mimalloc_test") {
@@ -93,4 +93,3 @@ group("mimalloc_test") {
         ":test-mallopt"
     ]
 }
-

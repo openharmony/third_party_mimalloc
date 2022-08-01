@@ -954,7 +954,7 @@ void* mi_new_reallocn(void* p, size_t newcount, size_t size) {
 #define cap(x) cap_max(x, INT_MAX)
 #define cap2(x) cap_max(x, SIZE_MAX)
 
-struct mallinfo mi_mallinfo() {
+struct mallinfo mi_mallinfo(void) {
   struct mallinfo mi = {0};
   struct mallinfo_s mi_mallinfo = {0};
 
@@ -974,10 +974,10 @@ struct mallinfo2 mi_mallinfo2(void) {
 
   mi_stats_mallinfo(&mi_mallinfo);
 
-  mi2.hblks = cap(mi_mallinfo.mmap_calls);
-  mi2.hblkhd = cap(mi_mallinfo.reserved);
-  mi2.uordblks = cap(mi_mallinfo.allocated);
-  mi2.fordblks = cap(mi_mallinfo.freed);
+  mi2.hblks = cap2(mi_mallinfo.mmap_calls);
+  mi2.hblkhd = cap2(mi_mallinfo.reserved);
+  mi2.uordblks = cap2(mi_mallinfo.allocated);
+  mi2.fordblks = cap2(mi_mallinfo.freed);
 
   return mi2;
 }

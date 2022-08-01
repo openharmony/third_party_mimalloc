@@ -274,8 +274,8 @@ static void mi_stats_print_bins(const mi_stat_count_t* bins, uint8_t max, const 
   for (uint8_t i = 0; i <= max; i++) {
     if (bins[i].allocated > 0) {
       found = true;
-      size_t unit = _mi_bin_size((uint8_t)i);
-      snprintf(buf, 64, "%s %3" PRIu8, fmt, (long)i);
+      size_t unit = _mi_bin_size(i);
+      snprintf(buf, 64, "%s %3" PRIu8, fmt, i);
       mi_stat_print(&bins[i], buf, unit, out, arg);
     }
   }
@@ -539,9 +539,9 @@ static void mi_stat_print_binary_count_stats_xml(const mi_stat_count_t *stat, in
 
 // unit > 0 => size in binary bytes (number + B|KiB|MiB|GiB)
 static void mi_stat_print_size_stats_no_freed_xml(const mi_stat_count_t *stat, mi_output_fun *out, void *arg) {
-  mi_print_amount_xml("peak", stat->peak, -1, out, arg);
-  mi_print_amount_xml("total", stat->allocated, -1, out, arg);
-  mi_print_amount_xml("current", stat->current, -1, out, arg);  
+  mi_print_amount_xml("peak", stat->peak, 1, out, arg);
+  mi_print_amount_xml("total", stat->allocated, 1, out, arg);
+  mi_print_amount_xml("current", stat->current, 1, out, arg);  
 }
 
 static void mi_stat_print_body_xml(const mi_stat_count_t *stat, int64_t unit, mi_output_fun *out, void *arg) {
