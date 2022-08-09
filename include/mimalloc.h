@@ -138,6 +138,8 @@ mi_decl_nodiscard mi_decl_export size_t mi_good_size(size_t size)     mi_attr_no
 // Internals
 // ------------------------------------------------------
 
+mi_decl_export void mi_lazy_process_load(void);
+
 typedef void (mi_cdecl mi_deferred_free_fun)(bool force, unsigned long long heartbeat, void* arg);
 mi_decl_export void mi_register_deferred_free(mi_deferred_free_fun* deferred_free, void* arg) mi_attr_noexcept;
 

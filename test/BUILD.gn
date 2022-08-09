@@ -10,7 +10,7 @@ template("mimalloc_unittest") {
       "//third_party/mimalloc/include"
     ]
 
-    deps = [ "//third_party/mimalloc:libmimalloc_static" ]
+    deps = [ "//third_party/mimalloc:libmimalloc_shared" ]
 
     output_name = "${target_name}"
 

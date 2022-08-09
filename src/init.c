@@ -611,6 +611,11 @@ static void mi_process_load(void) {
   }
 }
 
+void mi_lazy_process_load() {
+  if (mi_likely(_mi_process_is_initialized)) return;
+  mi_process_load();
+}
+
 #if defined(_WIN32) && (defined(_M_IX86) || defined(_M_X64))
 #include <intrin.h>
 mi_decl_cache_align bool _mi_cpu_has_fsrm = false;
@@ -751,7 +756,7 @@ static void mi_process_done(void) {
 #elif defined(__GNUC__) || defined(__clang__)
   // GCC,Clang: use the constructor attribute
   static void __attribute__((constructor)) _mi_process_init(void) {
-    mi_process_load();
+    mi_lazy_process_load();
   }
 
 #else

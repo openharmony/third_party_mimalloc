@@ -116,6 +116,7 @@ extern inline mi_decl_restrict void* mi_heap_malloc(mi_heap_t* heap, size_t size
 }
 
 extern inline mi_decl_restrict void* mi_malloc(size_t size) mi_attr_noexcept {
+  mi_lazy_process_load();
   bool locked = _mi_heap_lock_malloc();
   void* res = mi_heap_malloc(mi_get_default_heap(), size);
   if (mi_likely(locked))
@@ -560,7 +561,7 @@ mi_decl_noinline static size_t mi_page_usable_aligned_size_of(const mi_segment_t
 static inline size_t _mi_usable_size(const void* p, const char* msg) mi_attr_noexcept {
   const mi_segment_t* const segment = mi_checked_ptr_segment(p, msg);
   if (segment==NULL) return 0;  // also returns 0 if `p == NULL`
-  const mi_page_t* const page = _mi_segment_page_of(segment, p);  
+  const mi_page_t* const page = _mi_segment_page_of(segment, p);
   if (mi_likely(!mi_page_has_aligned(page))) {
     const mi_block_t* block = (const mi_block_t*)p;
     return mi_page_usable_size_of(page, block);
@@ -622,6 +623,7 @@ extern inline mi_decl_restrict void* mi_heap_calloc(mi_heap_t* heap, size_t coun
 }
 
 mi_decl_restrict void* mi_calloc(size_t count, size_t size) mi_attr_noexcept {
+  mi_lazy_process_load();
   bool locked = _mi_heap_lock_malloc();
   void* res = mi_heap_calloc(mi_get_default_heap(),count,size);
   if (mi_likely(locked))
@@ -655,6 +657,7 @@ void* mi_expand(void* p, size_t newsize) mi_attr_noexcept {
 }
 
 void* _mi_heap_realloc_zero(mi_heap_t* heap, void* p, size_t newsize, bool zero) mi_attr_noexcept {
+  mi_lazy_process_load();
   const size_t size = _mi_usable_size(p,"mi_realloc"); // also works if p == NULL
   if (mi_unlikely(newsize <= size && newsize >= (size / 2))) {
     // todo: adjust potential padding to reflect the new size?
