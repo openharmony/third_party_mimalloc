@@ -1,0 +1,3 @@
+mimalloc是一个具有优异性能的通用内存分配器。 
+
+OpenHarmony中默认使用musl自带的内存分配器，如果您需要更好的性能，可以选择使用mimalloc。
