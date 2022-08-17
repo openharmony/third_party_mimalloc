@@ -2,12 +2,11 @@ import("//build/test.gni")
 
 template("mimalloc_unittest") {
   ohos_unittest(target_name) {
-
     module_out_path = "mimalloc_test/${target_name}"
 
     include_dirs = [
       ".",
-      "//third_party/mimalloc/include"
+      "//third_party/mimalloc/include",
     ]
 
     deps = [ "//third_party/mimalloc:libmimalloc_shared" ]
@@ -36,27 +35,21 @@ template("mimalloc_unittest") {
 }
 
 mimalloc_unittest("test-api") {
-
 }
 
 mimalloc_unittest("test-api-fill") {
-
 }
 
 mimalloc_unittest("test-stress") {
-
 }
 
 mimalloc_unittest("test-stats-print") {
-
 }
 
 mimalloc_unittest("test-mallinfo2") {
-
 }
 
 mimalloc_unittest("test-mallopt") {
-
 }
 
 mimalloc_unittest("test-malloc_iterate") {
@@ -80,16 +73,16 @@ mimalloc_unittest("test-info") {
 }
 
 group("mimalloc_test") {
-    testonly = true
-    deps = [
-        ":test-api",
-        ":test-api-fill",
-        ":test-stats-print",
-        ":test-malloc_iterate",
-        ":test-disable",
-        ":test-info",
-        ":test-stress",
-        ":test-mallinfo2",
-        ":test-mallopt"
-    ]
+  testonly = true
+  deps = [
+    ":test-api",
+    ":test-api-fill",
+    ":test-disable",
+    ":test-info",
+    ":test-mallinfo2",
+    ":test-malloc_iterate",
+    ":test-mallopt",
+    ":test-stats-print",
+    ":test-stress",
+  ]
 }
