@@ -14,5 +14,6 @@ int main()
 
   assert(0 == mallopt(mi_option_verbose + 128, 1));
 
+  fprintf(stderr,"mallopt is succeeded.\n");
   return 0;
 }

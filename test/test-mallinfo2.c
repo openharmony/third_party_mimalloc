@@ -38,5 +38,7 @@ int main(void)
 
   test_mallinfo2();
 
+  fprintf(stderr,"mallinfo2 is succeeded.\n");
+
   return 0;
 }
