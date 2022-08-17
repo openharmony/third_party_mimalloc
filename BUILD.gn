@@ -3,7 +3,7 @@ import("//build/ohos.gni")
 config("libmimalloc_config") {
   include_dirs = [ "include" ]
 
-  cflags = [ 
+  cflags = [
     "-std=c11",
     "-Wno-unused-variable",
     "-Wno-uninitialized",
@@ -24,7 +24,7 @@ config("libmimalloc_config") {
     "-Wno-unsupported-floating-point-opt",
     "-Wno-bitwise-op-parentheses",
     "-DMI_DEBUG=0",
-    "-DMI_STAT=2"
+    "-DMI_STAT=2",
   ]
 }
 
@@ -33,20 +33,18 @@ ohos_shared_library("libmimalloc_shared") {
 
   license_file = "./NOTICE"
 
-  sources = [
-    "src/static.c"
-  ]
+  sources = [ "src/static.c" ]
 
   cflags = [ "-fPIC" ]
 
   defines = [
-      "MI_MALLOC_OVERRIDE",
-      "MI_SHARED_LIB",
-      "MI_SHARED_LIB_EXPORT",
-      "MI_TLS_PTHREAD",
-      "MI_USE_SYNCHRONIZED_ITERATE",
-      "__OHOS__",
-      "mimalloc_EXPORTS"
+    "MI_MALLOC_OVERRIDE",
+    "MI_SHARED_LIB",
+    "MI_SHARED_LIB_EXPORT",
+    "MI_TLS_PTHREAD",
+    "MI_USE_SYNCHRONIZED_ITERATE",
+    "__OHOS__",
+    "mimalloc_EXPORTS",
   ]
 
   install_enable = true
@@ -59,16 +57,14 @@ ohos_static_library("libmimalloc_static") {
 
   license_file = "./NOTICE"
 
-  sources = [
-    "src/static.c"
-  ]
+  sources = [ "src/static.c" ]
 
   defines = [
     "MI_MALLOC_OVERRIDE",
     "MI_TLS_PTHREAD",
     "MI_USE_SYNCHRONIZED_ITERATE",
     "__OHOS__",
-    "mimalloc_EXPORTS"
+    "mimalloc_EXPORTS",
   ]
 
   subsystem_name = "thirdparty"
@@ -77,7 +73,5 @@ ohos_static_library("libmimalloc_static") {
 
 group("mimalloc_test") {
   testonly = true
-  deps = [
-    "test:mimalloc_test"
-  ]
+  deps = [ "test:mimalloc_test" ]
 }
