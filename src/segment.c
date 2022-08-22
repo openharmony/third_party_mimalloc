@@ -9,7 +9,6 @@ terms of the MIT license. A copy of the license can be found in the file
 #include "mimalloc-atomic.h"
 
 #include <string.h>  // memset
-#include <stdio.h>
 
 #define MI_PAGE_HUGE_ALIGN  (256*1024)
 
@@ -1541,4 +1540,35 @@ mi_page_t* _mi_segment_page_alloc(mi_heap_t* heap, size_t block_size, mi_segment
   return page;
 }
 
+void mi_segment_walk_through_abandoned_segments(mi_iterate_info_t* iterate_info) {
+  mi_abandoned_visited_revisit();
+  mi_tagged_segment_t ts = mi_atomic_load_relaxed(&abandoned);
+  mi_segment_t* segment = mi_tagged_segment_ptr(ts);
 
+  while (segment != NULL) {
+    const mi_slice_t* end;
+    mi_slice_t* slice = mi_slices_start_iterate(segment, &end);
+    while (slice < end) {
+      mi_assert_internal(slice->slice_count > 0);
+      mi_assert_internal(slice->slice_offset == 0);
+      if (mi_slice_is_used(slice)) { // used page
+        mi_page_t* const page = mi_slice_to_page(slice);
+        if (!mi_page_all_free(page)) {
+          uint8_t* block = _mi_page_start(segment, page, NULL);
+          uint8_t* end   = block + (page->capacity * mi_page_block_size(page));
+          size_t block_size = mi_page_block_size(page);
+          while(block < end) {
+            uint8_t* next = (uint8_t*)(block + block_size);
+            if ((uintptr_t)block >= iterate_info->start_ptr && (uintptr_t)block < iterate_info->end_ptr) {
+              iterate_info->callback(block, block_size, iterate_info->arg);
+            }
+            block = next;
+          }
+        }
+      }
+      mi_assert_internal(slice->slice_count>0 && slice->slice_offset==0);
+      slice = slice + slice->slice_count;
+    }
+    segment = mi_atomic_load_ptr_relaxed(mi_segment_t, &segment->abandoned_next);
+  }
+}

@@ -15,6 +15,10 @@ terms of the MIT license. A copy of the license can be found in the file
 #pragma warning(disable:4204)  // non-constant aggregate initializer
 #endif
 
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+mi_decl_cache_align _Atomic(bool) heap_init_disabled; // = 0
+#endif
+
 /* -----------------------------------------------------------
   Helpers
 ----------------------------------------------------------- */
@@ -577,4 +581,117 @@ static bool mi_heap_area_visitor(const mi_heap_t* heap, const mi_heap_area_ex_t*
 bool mi_heap_visit_blocks(const mi_heap_t* heap, bool visit_blocks, mi_block_visit_fun* visitor, void* arg) {
   mi_visit_blocks_args_t args = { visit_blocks, visitor, arg };
   return mi_heap_visit_areas(heap, &mi_heap_area_visitor, &args);
+}
+
+extern mi_detached_page_queue_t detached_page_queue;
+
+static void mi_heap_visit_huge_pages(mi_iterate_info_t* iterate_info)
+{
+  _mi_page_lock_detached_page_queue();
+  mi_page_t* page = detached_page_queue.first;
+  while (page != NULL) {
+    mi_segment_t* segment = _mi_page_segment(page);
+    uint8_t* block = _mi_page_start(segment, page, NULL);
+    if ((uintptr_t)block >= iterate_info->start_ptr && (uintptr_t)block < iterate_info->end_ptr) {
+      size_t block_size = mi_page_block_size(page);
+      iterate_info->callback(block, block_size, iterate_info->arg);
+    }
+    page = page->next;
+  }
+  _mi_page_unlock_detached_page_queue();
+}
+
+static bool mi_malloc_iterate_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
+  MI_UNUSED(heap);
+  MI_UNUSED(area);
+  mi_iterate_info_t *iterate_info = (mi_iterate_info_t*)arg;
+  if ((uintptr_t)block >= iterate_info->start_ptr && (uintptr_t)block < iterate_info->end_ptr) {
+    iterate_info->callback(block, block_size, iterate_info->arg);
+  }
+  return true;
+}
+
+int mi_malloc_iterate(void* base, size_t size, void (*callback)(void* base, size_t size, void* arg), void* arg) {
+  // Make sure the pointer is aligned to at least 8 bytes.
+  uintptr_t ptr = (uintptr_t)base;
+  uintptr_t end_ptr = ptr + size;
+  mi_iterate_info_t iterate_info = {ptr, end_ptr, callback, arg};
+  _mi_heap_lock_heap_queue();
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    mi_heap_t* tld_heap = heap->tld->heaps;
+    while (tld_heap != NULL) {
+      mi_heap_visit_blocks(tld_heap, true, &mi_malloc_iterate_visitor, &iterate_info);
+      tld_heap = tld_heap->next;
+    }
+    heap = heap->next_thread_heap;
+  }
+  _mi_heap_unlock_heap_queue();
+  mi_heap_visit_huge_pages(&iterate_info);
+  mi_segment_walk_through_abandoned_segments(&iterate_info);
+  return 0;
+}
+
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+static inline void mi_common_lock(_Atomic(bool) *flag) {
+  while (mi_atomic_exchange_acq_rel(flag, true)) {
+    mi_atomic_yield();
+  }
+}
+
+static inline void mi_common_unlock(_Atomic(bool) *flag) {
+  mi_atomic_store_release(flag, false);
+}
+#endif
+
+
+bool _mi_heap_lock_malloc(void) {
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+  mi_heap_t *heap = mi_get_default_heap();
+  if (mi_unlikely(heap == NULL || heap->tld == NULL))
+    return false;
+  mi_common_lock(&heap->tld->malloc_disabled);
+  return true;
+#endif
+  return true;
+}
+
+void _mi_heap_unlock_malloc(void) {
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+  mi_heap_t *heap = mi_get_default_heap();
+  if (mi_likely(heap != NULL && heap->tld != NULL))
+    mi_common_unlock(&heap->tld->malloc_disabled);
+#endif
+}
+
+void _mi_heap_lock_iterate(void) {
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+  mi_common_lock(&heap_init_disabled);
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    if (heap->tld != NULL)
+      mi_common_lock(&heap->tld->malloc_disabled);
+    heap = heap->next_thread_heap;
+  }
+#endif
+}
+
+void _mi_heap_unlock_iterate(void) {
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    if (heap->tld != NULL)
+      mi_common_unlock(&heap->tld->malloc_disabled);
+    heap = heap->next_thread_heap;
+  }
+  mi_common_unlock(&heap_init_disabled);
+#endif
+}
+
+void mi_malloc_disable(void) {
+  _mi_heap_lock_iterate();
+}
+
+void mi_malloc_enable(void) {
+  _mi_heap_unlock_iterate();
 }

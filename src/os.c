@@ -37,6 +37,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #else
 #include <sys/mman.h>  // mmap
 #include <unistd.h>    // sysconf
+#include <sys/prctl.h> // prctl
 #if defined(__linux__)
 #include <features.h>
 #include <fcntl.h>
@@ -567,14 +568,20 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
     void* hint = mi_os_get_aligned_hint(try_alignment, size);
     if (hint != NULL) {
       void* p = mmap(hint, size, protect_flags, flags, fd, 0);
-      if (p!=MAP_FAILED) return p;
+      if (p!=MAP_FAILED) {
+        prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, p, size, "native_heap:mimalloc");
+        return p;
+      }
       // fall back to regular mmap
     }
   }
   #endif
   // regular mmap
   void* p = mmap(addr, size, protect_flags, flags, fd, 0);
-  if (p!=MAP_FAILED) return p;  
+  if (p!=MAP_FAILED) {
+    prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, p, size, "native_heap:mimalloc");
+    return p;
+  }
   // failed to allocate
   return NULL;
 }

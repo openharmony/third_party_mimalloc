@@ -10,6 +10,11 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #include <stdio.h>  // fputs, stderr
 #include <string.h> // memset
+#include <inttypes.h> //PRId64, PRIu8
+
+#define XML_PRINT_AMOUNT_BUFFER_SIZE 64
+#define XML_PRINT_BINS_BUFFER_SIZE 64
+#define XML_STATS_PRINT_BUFFERED_COUNT 255
 
 #if defined(_MSC_VER) && (_MSC_VER < 1920)
 #pragma warning(disable:4204)  // non-constant aggregate initializer
@@ -129,10 +134,27 @@ static void mi_stats_add(mi_stats_t* stats, const mi_stats_t* src) {
   Display statistics
 ----------------------------------------------------------- */
 
+typedef enum {
+    TABLE,
+    XML
+} print_mode_t;
+
+/**
+ * Trim string from the end in-place
+ * @param s - a null-terminated string
+ */
+static void trim_right_in_place(char *s) {
+  size_t end_exclusive = strlen(s);
+  while (end_exclusive > 0 && s[end_exclusive - 1] == ' ') {
+    end_exclusive--;
+  }
+  s[end_exclusive] = '\0';
+}
+
 // unit > 0 : size in binary bytes 
 // unit == 0: count as decimal
 // unit < 0 : count in binary
-static void mi_printf_amount(int64_t n, int64_t unit, mi_output_fun* out, void* arg, const char* fmt) {
+static void mi_printf_amount(int64_t n, int64_t unit, mi_output_fun* out, void* arg, const char* fmt, print_mode_t print_mode) {
   char buf[32]; buf[0] = 0;  
   int  len = 32;
   const char* suffix = (unit <= 0 ? " " : "B");
@@ -151,18 +173,21 @@ static void mi_printf_amount(int64_t n, int64_t unit, mi_output_fun* out, void* 
     if (pos >= divider*base) { divider *= base; magnitude = "M"; }
     if (pos >= divider*base) { divider *= base; magnitude = "G"; }
     const int64_t tens = (n / (divider/10));
-    const long whole = (long)(tens/10);
-    const long frac1 = (long)(tens%10);
+    const int64_t whole = tens/10;
+    const int8_t frac1 = (int8_t)(tens%10);
     char unitdesc[8];
     snprintf(unitdesc, 8, "%s%s%s", magnitude, (base==1024 ? "i" : ""), suffix);
-    snprintf(buf, len, "%ld.%ld %-3s", whole, (frac1 < 0 ? -frac1 : frac1), unitdesc);
+    snprintf(buf, len, "%" PRId64 ".%" PRId8 " %-3s", whole, (frac1 < 0 ? -frac1 : frac1), unitdesc);
+  }
+  if (print_mode == XML) {
+    trim_right_in_place(buf);
   }
   _mi_fprintf(out, arg, (fmt==NULL ? "%11s" : fmt), buf);
 }
 
 
 static void mi_print_amount(int64_t n, int64_t unit, mi_output_fun* out, void* arg) {
-  mi_printf_amount(n,unit,out,arg,NULL);
+  mi_printf_amount(n,unit,out,arg,NULL,TABLE);
 }
 
 static void mi_print_count(int64_t n, int64_t unit, mi_output_fun* out, void* arg) {
@@ -217,26 +242,40 @@ static void mi_stat_counter_print(const mi_stat_counter_t* stat, const char* msg
 }
 
 static void mi_stat_counter_print_avg(const mi_stat_counter_t* stat, const char* msg, mi_output_fun* out, void* arg) {
-  const int64_t avg_tens = (stat->count == 0 ? 0 : (stat->total*10 / stat->count)); 
-  const long avg_whole = (long)(avg_tens/10);
-  const long avg_frac1 = (long)(avg_tens%10);
-  _mi_fprintf(out, arg, "%10s: %5ld.%ld avg\n", msg, avg_whole, avg_frac1);
+  const int64_t avg_tens = (stat->count == 0 ? 0 : (stat->total*10 / stat->count));
+  const int64_t avg_whole = avg_tens/10;
+  const int8_t avg_frac1 = (int8_t)(avg_tens%10);
+  _mi_fprintf(out, arg, "%10s: %5" PRId64 ".%" PRId8 " avg\n", msg, avg_whole, avg_frac1);
 }
 
+typedef struct {
+  int64_t avg_whole;
+  int8_t avg_frac;
+} avg_t;
+
+static avg_t mi_get_avg(const mi_stat_counter_t *stat) {
+  const int64_t avg_tens = (stat->count == 0 ? 0 : (stat->total*10 / stat->count));
+  return (avg_t) {.avg_whole = avg_tens / 10, .avg_frac = (int8_t) (avg_tens % 10)};
+}
+
+static void mi_stat_counter_print_avg_xml(const mi_stat_counter_t* stat, const char* name, mi_output_fun* out, void* arg) {
+  const avg_t avg = mi_get_avg(stat);
+  _mi_fprintf(out, arg, "<%s>%" PRId64 ".%" PRId8 " avg </%s>\n", name, avg.avg_whole, avg.avg_frac, name);
+}
 
 static void mi_print_header(mi_output_fun* out, void* arg ) {
   _mi_fprintf(out, arg, "%10s: %10s %10s %10s %10s %10s %10s\n", "heap stats", "peak   ", "total   ", "freed   ", "current   ", "unit   ", "count   ");
 }
 
 #if MI_STAT>1
-static void mi_stats_print_bins(const mi_stat_count_t* bins, size_t max, const char* fmt, mi_output_fun* out, void* arg) {
+static void mi_stats_print_bins(const mi_stat_count_t* bins, uint8_t max, const char* fmt, mi_output_fun* out, void* arg) {
   bool found = false;
   char buf[64];
-  for (size_t i = 0; i <= max; i++) {
+  for (uint8_t i = 0; i <= max; i++) {
     if (bins[i].allocated > 0) {
       found = true;
-      int64_t unit = _mi_bin_size((uint8_t)i);
-      snprintf(buf, 64, "%s %3lu", fmt, (long)i);
+      size_t unit = _mi_bin_size(i);
+      snprintf(buf, 64, "%s %3" PRIu8, fmt, i);
       mi_stat_print(&bins[i], buf, unit, out, arg);
     }
   }
@@ -283,7 +322,35 @@ static void mi_buffered_out(const char* msg, void* arg) {
 // Print statistics
 //------------------------------------------------------------
 
+typedef struct {
+  void (*write_cb) (void*, const char*);
+  char *arg;
+} arg_cb_wrapper_t;
+
 static void mi_stat_process_info(mi_msecs_t* elapsed, mi_msecs_t* utime, mi_msecs_t* stime, size_t* current_rss, size_t* peak_rss, size_t* current_commit, size_t* peak_commit, size_t* page_faults);
+
+static void mi_stat_print_xml_element(const mi_stat_count_t *, const char *, int64_t, mi_output_fun *, void *);
+
+static void mi_print_allocations(const mi_stats_t *stats, mi_output_fun *out, void *arg, print_mode_t print_mode) {
+  void (*stat_print_cb)
+  (
+      const mi_stat_count_t *,
+      const char *, int64_t,
+      mi_output_fun *,
+      void *
+  ) = print_mode == TABLE ? mi_stat_print : mi_stat_print_xml_element;
+  stat_print_cb(&stats->normal, "normal",
+      (stats->normal_count.count == 0 ? 1 : -(stats->normal.allocated / stats->normal_count.count)), out, arg);
+  stat_print_cb(&stats->large, "large",
+      (stats->large_count.count == 0 ? 1 : -(stats->large.allocated / stats->large_count.count)), out, arg);
+  stat_print_cb(&stats->huge, "huge",
+      (stats->huge_count.count == 0 ? 1 : -(stats->huge.allocated / stats->huge_count.count)), out, arg);
+  mi_stat_count_t total = {0, 0, 0, 0};
+  mi_stat_add(&total, &stats->normal, 1);
+  mi_stat_add(&total, &stats->large, 1);
+  mi_stat_add(&total, &stats->huge, 1);
+  stat_print_cb(&total, "total", 1, out, arg);
+}
 
 static void _mi_stats_print(mi_stats_t* stats, mi_output_fun* out0, void* arg0) mi_attr_noexcept {
   // wrap the output function to be line buffered
@@ -299,14 +366,7 @@ static void _mi_stats_print(mi_stats_t* stats, mi_output_fun* out0, void* arg0) 
   mi_stats_print_bins(stats->normal_bins, MI_BIN_HUGE, "normal",out,arg);
   #endif
   #if MI_STAT
-  mi_stat_print(&stats->normal, "normal", (stats->normal_count.count == 0 ? 1 : -(stats->normal.allocated / stats->normal_count.count)), out, arg);
-  mi_stat_print(&stats->large, "large", (stats->large_count.count == 0 ? 1 : -(stats->large.allocated / stats->large_count.count)), out, arg);
-  mi_stat_print(&stats->huge, "huge", (stats->huge_count.count == 0 ? 1 : -(stats->huge.allocated / stats->huge_count.count)), out, arg);
-  mi_stat_count_t total = { 0,0,0,0 };
-  mi_stat_add(&total, &stats->normal, 1);
-  mi_stat_add(&total, &stats->large, 1);
-  mi_stat_add(&total, &stats->huge, 1);
-  mi_stat_print(&total, "total", 1, out, arg);
+  mi_print_allocations(stats, out, arg, TABLE);
   #endif
   #if MI_STAT>1
   mi_stat_print(&stats->malloc, "malloc req", 1, out, arg);
@@ -338,13 +398,13 @@ static void _mi_stats_print(mi_stats_t* stats, mi_output_fun* out0, void* arg0) 
   size_t peak_commit;
   size_t page_faults;
   mi_stat_process_info(&elapsed, &user_time, &sys_time, &current_rss, &peak_rss, &current_commit, &peak_commit, &page_faults);
-  _mi_fprintf(out, arg, "%10s: %7ld.%03ld s\n", "elapsed", elapsed/1000, elapsed%1000);
-  _mi_fprintf(out, arg, "%10s: user: %ld.%03ld s, system: %ld.%03ld s, faults: %lu, rss: ", "process",
-              user_time/1000, user_time%1000, sys_time/1000, sys_time%1000, (unsigned long)page_faults );
-  mi_printf_amount((int64_t)peak_rss, 1, out, arg, "%s");
+  _mi_fprintf(out, arg, "%10s: %7" PRId64 ".%03" PRId64 " s\n", "elapsed", elapsed/1000, elapsed%1000);
+  _mi_fprintf(out, arg, "%10s: user: %" PRId64 ".%03" PRId64 " s, system: %" PRId64 ".%03" PRId64 " s, faults: %zu, rss: ", "process",
+              user_time/1000, user_time%1000, sys_time/1000, sys_time%1000, page_faults);
+  mi_printf_amount((int64_t)peak_rss, 1, out, arg, "%s", TABLE);
   if (peak_commit > 0) {
     _mi_fprintf(out, arg, ", commit: ");
-    mi_printf_amount((int64_t)peak_commit, 1, out, arg, "%s");
+    mi_printf_amount((int64_t)peak_commit, 1, out, arg, "%s", TABLE);
   }
   _mi_fprintf(out, arg, "\n");  
 }
@@ -392,6 +452,247 @@ void mi_thread_stats_print_out(mi_output_fun* out, void* arg) mi_attr_noexcept {
   _mi_stats_print(mi_stats_get_default(), out, arg);
 }
 
+static void mi_stats_print_out_callback_wrapper(const char* message, void* arg) {
+  // swap arguments for compatibility with je_malloc_stats_print
+  const arg_cb_wrapper_t *arg_wrapper = arg;
+  arg_wrapper->write_cb(arg_wrapper->arg, message);
+}
+
+static mi_stats_t mi_stats_merge_all_heaps_stats(void) {
+  mi_stats_t merged_stats = _mi_stats_get_empty_stats();
+  _mi_heap_lock_heap_queue();
+  mi_stats_add(&merged_stats, &_mi_stats_main);
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    mi_stats_add(&merged_stats, &heap->tld->stats);
+    heap = heap->next_thread_heap;
+  }
+  _mi_heap_unlock_heap_queue();
+  return merged_stats;
+}
+
+void mi_malloc_stats_print(void (*write_cb) (void*, const char*), void* cbopaque, const char* opts) {
+  MI_UNUSED(opts);
+  mi_stats_t merged_stats = mi_stats_merge_all_heaps_stats();
+  if (write_cb == NULL) {
+      _mi_stats_print(&merged_stats, NULL, NULL);
+  }
+  else {
+      arg_cb_wrapper_t arg = {
+          .write_cb = write_cb,
+          .arg = cbopaque,
+      };
+      _mi_stats_print(&merged_stats, &mi_stats_print_out_callback_wrapper, (void *)&arg);
+  }
+}
+
+static void print_to_file(const char *s, void *fp) {
+  fputs(s, fp);
+}
+
+static void mi_print_amount_xml(const char *name, int64_t n, int64_t unit, mi_output_fun *out, void *arg) {
+  char buf[XML_PRINT_AMOUNT_BUFFER_SIZE];
+  snprintf(buf, XML_PRINT_AMOUNT_BUFFER_SIZE, "<%s>%%s</%s>\n", name, name);
+  mi_printf_amount(n, unit, out, arg, buf, XML);
+}
+
+static void mi_print_count_xml(int64_t n, int64_t unit, mi_output_fun *out, void *arg) {
+  if (unit == 1) {
+    return;
+  }
+  mi_print_amount_xml("count", n, 0, out, arg);
+}
+
+static void mi_stat_print_allocation_result_xml(const mi_stat_count_t *stat, mi_output_fun *out, void *arg) {
+  if(stat->allocated > stat->freed) {
+    _mi_fprintf(out, arg, "<result>not all freed!</result>\n");
+  }
+  else {
+    _mi_fprintf(out, arg, "<result>ok</result>\n");
+  }
+}
+
+// unit > 0 => size in binary bytes (number + B|KiB|MiB|GiB)
+static void mi_stat_print_size_stats_xml(const mi_stat_count_t *stat, int64_t unit, mi_output_fun *out, void *arg) {
+  mi_print_amount_xml("peak", stat->peak, unit, out, arg); // size in binary bytes
+  mi_print_amount_xml("total", stat->allocated, unit, out, arg);
+  mi_print_amount_xml("freed", stat->freed, unit, out, arg);
+  mi_print_amount_xml("current", stat->current, unit, out, arg);
+  if (unit != 1) { // hack
+    mi_print_amount_xml("unit", unit, 1, out, arg);
+  }
+  mi_print_count_xml(stat->allocated, unit, out, arg);
+}
+
+// unit < 0 => count in binary (number or number + Ki|Mi|Gi)
+static void mi_stat_print_binary_count_stats_xml(const mi_stat_count_t *stat, int64_t unit, mi_output_fun *out, void *arg) {
+  mi_print_amount_xml("peak", stat->peak, -1, out, arg);
+  mi_print_amount_xml("total", stat->allocated, -1, out, arg);
+  mi_print_amount_xml("freed", stat->freed, -1, out, arg);
+  mi_print_amount_xml("current", stat->current, -1, out, arg);
+  if (unit != -1) {
+    mi_print_amount_xml("unit", -unit, 1, out, arg);
+    // unit == 0 => count in decimal (number or number + Ki|Mi|Gi)
+    mi_print_count_xml((stat->allocated / -unit), 0, out, arg);
+  }
+}
+
+// unit > 0 => size in binary bytes (number + B|KiB|MiB|GiB)
+static void mi_stat_print_size_stats_no_freed_xml(const mi_stat_count_t *stat, mi_output_fun *out, void *arg) {
+  mi_print_amount_xml("peak", stat->peak, 1, out, arg);
+  mi_print_amount_xml("total", stat->allocated, 1, out, arg);
+  mi_print_amount_xml("current", stat->current, 1, out, arg);  
+}
+
+static void mi_stat_print_body_xml(const mi_stat_count_t *stat, int64_t unit, mi_output_fun *out, void *arg) {
+  if (unit == 0) {
+    mi_stat_print_size_stats_no_freed_xml(stat, out, arg);
+    return;
+  }
+  if (unit > 0) {
+    mi_stat_print_size_stats_xml(stat, unit, out, arg);
+  } else {
+    mi_stat_print_binary_count_stats_xml(stat, unit, out, arg);
+  }
+  mi_stat_print_allocation_result_xml(stat, out, arg);
+}
+
+static void mi_stat_print_xml_element_with_attrs(const mi_stat_count_t *stat, const char *name, const char *attrs, int64_t unit, mi_output_fun *out, void *arg) {
+
+  _mi_fprintf(out, arg, "<%s%s>\n", name, attrs);
+  mi_stat_print_body_xml(stat, unit, out, arg);
+  _mi_fprintf(out, arg, "</%s>\n", name);
+}
+
+static void mi_stat_print_xml_element(const mi_stat_count_t *stat, const char *name, int64_t unit, mi_output_fun *out, void *arg) {
+  mi_stat_print_xml_element_with_attrs(stat, name, "", unit, out, arg);
+}
+
+static void mi_stat_counter_print_xml(const mi_stat_counter_t *stat, const char *name, mi_output_fun *out, void *arg) {
+  mi_print_amount_xml(name, stat->total, -1, out, arg);
+}
+
+static void mi_print_milliseconds_xml(const char *name, mi_msecs_t msecs, mi_output_fun *out, void *arg) {
+  _mi_fprintf(out, arg, "<%s>%" PRId64 ".%03" PRId64 " s</%s>\n", name, msecs / 1000, msecs % 1000, name);
+}
+
+#if MI_STAT > 1
+
+static void mi_stats_print_bins_xml(const mi_stat_count_t *bins, uint8_t max, mi_output_fun *out, void *arg) {
+  char buf[XML_PRINT_BINS_BUFFER_SIZE];
+  for (uint8_t i = 0; i <= max; i++) {
+    if (bins[i].allocated > 0) {
+      size_t unit = _mi_bin_size(i);
+      snprintf(buf, XML_PRINT_BINS_BUFFER_SIZE, " size_class=\"%" PRIu8 "\"", i);
+      mi_stat_print_xml_element_with_attrs(&bins[i], "bin", buf, unit, out, arg);
+    }
+  }
+}
+
+#endif
+
+static void mi_stats_print_process_info_xml(mi_output_fun *out, void *arg) {
+  mi_msecs_t elapsed;
+  mi_msecs_t user_time;
+  mi_msecs_t sys_time;
+  size_t current_rss;
+  size_t peak_rss;
+  size_t current_commit;
+  size_t peak_commit;
+  size_t page_faults;
+  mi_stat_process_info(&elapsed, &user_time, &sys_time, &current_rss, &peak_rss, &current_commit, &peak_commit, 
+                       &page_faults);
+  mi_print_milliseconds_xml("elapsed", elapsed, out, arg);
+  _mi_fprintf(out, arg, "<process>\n");
+  mi_print_milliseconds_xml("user", user_time, out, arg);
+  mi_print_milliseconds_xml("system", sys_time, out, arg);
+  _mi_fprintf(out, arg, "<faults>%zu</faults>\n", page_faults);
+  mi_print_amount_xml("rss", peak_rss, 1, out, arg);
+  if (peak_commit > 0) {
+    mi_print_amount_xml("commit", peak_commit, 1, out, arg);
+  }
+  _mi_fprintf(out, arg, "</process>\n");
+}
+
+static void mi_stats_print_segments_xml(const mi_stats_t *stats, mi_output_fun *out, void *arg) {
+  _mi_fprintf(out, arg, "<segments>\n");
+  mi_stat_print_body_xml(&stats->segments, -1, out, arg);
+  mi_stat_print_xml_element(&stats->segments_abandoned, "abandoned", -1, out, arg);
+  mi_stat_print_xml_element(&stats->segments_cache, "cached", -1, out, arg);
+  _mi_fprintf(out, arg, "</segments>\n");
+}
+
+static void mi_stats_print_pages_xml(const mi_stats_t *stats, mi_output_fun *out, void *arg) {
+  _mi_fprintf(out, arg, "<pages>\n");
+  mi_stat_print_body_xml(&stats->pages, -1, out, arg);
+  mi_stat_print_xml_element(&stats->pages_abandoned, "abandoned", -1, out, arg);
+  mi_stat_counter_print_xml(&stats->pages_extended, "extended", out, arg);
+  mi_stat_counter_print_xml(&stats->page_no_retire, "noretire", out, arg);
+  _mi_fprintf(out, arg, "</pages>\n");
+}
+
+static void mi_stats_print_xml(const mi_stats_t *stats, mi_output_fun *out0, void *arg0) mi_attr_noexcept {
+  // wrap the output function to be line buffered
+  char buf[XML_STATS_PRINT_BUFFERED_COUNT + 1];
+  buffered_t buffer = {out0, arg0, buf, 0, XML_STATS_PRINT_BUFFERED_COUNT};
+  mi_output_fun *out = &mi_buffered_out;
+  void *arg = &buffer;
+
+#if MI_STAT > 1
+  _mi_fprintf(out, arg, "<bins>\n");
+  mi_stats_print_bins_xml(stats->normal_bins, MI_BIN_HUGE, out, arg);
+  _mi_fprintf(out, arg, "</bins>\n");
+#endif
+#if MI_STAT
+  _mi_fprintf(out, arg, "<allocations>\n");
+  mi_print_allocations(stats, out, arg, XML);
+  _mi_fprintf(out, arg, "</allocations>\n");
+
+#endif
+#if MI_STAT > 1
+  mi_stat_print_xml_element(&stats->malloc, "malloc_req", 1, out, arg);
+#endif
+  mi_stat_print_xml_element(&stats->reserved, "reserved", 1, out, arg);
+  mi_stat_print_xml_element(&stats->committed, "committed", 1, out, arg);
+  mi_stat_print_xml_element(&stats->reset, "reset", 1, out, arg);
+  mi_stat_print_xml_element(&stats->page_committed, "touched", 1, out, arg);
+
+  mi_stats_print_segments_xml(stats, out, arg);
+
+  mi_stats_print_pages_xml(stats, out, arg);
+
+  mi_stat_counter_print_xml(&stats->mmap_calls, "mmaps", out, arg);
+  mi_stat_counter_print_xml(&stats->commit_calls, "commits", out, arg);
+  mi_stat_print_xml_element(&stats->threads, "threads", -1, out, arg);
+
+  mi_stat_counter_print_avg_xml(&stats->searches, "searches", out, arg);
+  _mi_fprintf(out, arg, "<numa_nodes>%zu</numa_nodes>\n", _mi_os_numa_node_count());
+  mi_stats_print_process_info_xml(out, arg);
+}
+
+int mi_malloc_info(int options, FILE *fp) {
+  if (options != 0) {
+    errno = EINVAL;
+    return -1;
+  }
+  _mi_fprintf(print_to_file, fp, "<?xml version=\"1.0\"?>\n");
+  _mi_fprintf(print_to_file, fp, "<malloc version=\"mimalloc-%d\">\n", mi_version());
+  _mi_heap_lock_heap_queue();
+
+  _mi_fprintf(print_to_file, fp, "<stats_main>\n");
+  mi_stats_print_xml(&_mi_stats_main, print_to_file, fp);
+  _mi_fprintf(print_to_file, fp, "</stats_main>\n");
+  mi_heap_t* heap = _mi_heap_main_get();
+  while (heap != NULL) {
+    _mi_fprintf(print_to_file, fp, "<heap thread_id=\"%zu\">\n", heap->thread_id);
+    mi_stats_print_xml(&heap->tld->stats, print_to_file,fp);
+    heap = heap->next_thread_heap;
+    _mi_fprintf(print_to_file, fp, "</heap>\n");
+  }
+  _mi_heap_unlock_heap_queue();
+  _mi_fprintf(print_to_file, fp, "</malloc>\n");
+  return 0;
+}
 
 // ----------------------------------------------------------------
 // Basic timer for convenience; use milli-seconds to avoid doubles
@@ -580,5 +881,22 @@ mi_decl_export void mi_process_info(size_t* elapsed_msecs, size_t* user_msecs, s
   if (current_commit!=NULL) *current_commit = current_commit0;
   if (peak_commit!=NULL)    *peak_commit    = peak_commit0;
   if (page_faults!=NULL)    *page_faults    = page_faults0;
+}
+
+mi_decl_export void mi_stats_mallinfo(mallinfo_t *minfo) mi_attr_noexcept
+{
+  if (minfo == NULL) return;
+  mi_stats_merge_from(mi_stats_get_default());
+
+  minfo->reserved = _mi_stats_main.reserved.allocated;
+  minfo->mmap_calls = _mi_stats_main.mmap_calls.count;
+
+  mi_stat_count_t total = { 0, 0, 0, 0 };
+  mi_stat_add(&total, &_mi_stats_main.normal, 1);
+  mi_stat_add(&total, &_mi_stats_main.large, 1);
+  mi_stat_add(&total, &_mi_stats_main.huge, 1);
+
+  minfo->allocated = total.allocated;
+  minfo->freed = total.freed;
 }
 

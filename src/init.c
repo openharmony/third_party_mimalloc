@@ -4,11 +4,57 @@ This is free software; you can redistribute it and/or modify it under the
 terms of the MIT license. A copy of the license can be found in the file
 "LICENSE" at the root of this distribution.
 -----------------------------------------------------------------------------*/
+#include <stdbool.h>
 #include "mimalloc.h"
 #include "mimalloc-internal.h"
+#include "mimalloc-atomic.h"
 
 #include <string.h>  // memcpy, memset
 #include <stdlib.h>  // atexit
+
+static mi_decl_cache_align _Atomic(bool) lock_heap_queue; // = 0
+static mi_heap_t*                        heap_queue_last; // = NULL
+
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+extern mi_decl_cache_align _Atomic(bool) heap_init_disabled; // = 0
+#endif
+
+void _mi_heap_lock_heap_queue(void) {
+  while (mi_atomic_exchange_acq_rel(&lock_heap_queue, true)) {
+    mi_atomic_yield();
+  }
+}
+
+void _mi_heap_unlock_heap_queue(void) {
+  mi_atomic_store_release(&lock_heap_queue, false);
+}
+
+static void mi_heap_queue_push(mi_heap_t* heap) {
+  _mi_heap_lock_heap_queue();
+  mi_assert_internal(heap_queue_last->next_thread_heap == NULL);
+
+  heap_queue_last->next_thread_heap = heap;
+  heap->prev_thread_heap = heap_queue_last;
+  heap_queue_last = heap;
+  _mi_heap_unlock_heap_queue();
+}
+
+static void mi_heap_queue_remove(mi_heap_t* heap) {
+  _mi_heap_lock_heap_queue();
+  if (heap_queue_last == NULL) {
+    heap_queue_last = _mi_heap_main_get();
+  }
+  mi_assert_internal(heap_queue_last != NULL);
+  mi_assert_internal(heap->prev_thread_heap != NULL);
+
+  heap->prev_thread_heap->next_thread_heap = heap->next_thread_heap;
+  if (heap->next_thread_heap != NULL) heap->next_thread_heap->prev_thread_heap = heap->prev_thread_heap;
+  if (heap == heap_queue_last)  heap_queue_last = heap->prev_thread_heap;
+
+  heap->prev_thread_heap = NULL;
+  heap->next_thread_heap = NULL;
+  _mi_heap_unlock_heap_queue();
+}
 
 // Empty page used to initialize the small free pages array
 const mi_page_t _mi_page_empty = {
@@ -27,7 +73,9 @@ const mi_page_t _mi_page_empty = {
   NULL,    // local_free
   MI_ATOMIC_VAR_INIT(0), // xthread_free
   MI_ATOMIC_VAR_INIT(0), // xheap
-  NULL, NULL
+  NULL,    // next page
+  NULL     // prev page
+
   #if MI_INTPTR_SIZE==8
   , { 0 }  // padding
   #endif
@@ -114,6 +162,8 @@ mi_decl_cache_align const mi_heap_t _mi_heap_empty = {
   0,                // page count
   MI_BIN_FULL, 0,   // page retired min/max
   NULL,             // next
+  NULL,             // next thread heap
+  NULL,             // prev thread heap
   false
 };
 
@@ -126,11 +176,14 @@ mi_decl_cache_align static const mi_tld_t tld_empty = {
   NULL, NULL,
   { MI_SEGMENT_SPAN_QUEUES_EMPTY, 0, 0, 0, 0, tld_empty_stats, tld_empty_os }, // segments
   { 0, tld_empty_stats }, // os
-  { MI_STATS_NULL }       // stats
+  { MI_STATS_NULL },      // stats
+  0
 };
 
+#if !defined(__OHOS__) && !defined(MI_TLS_PTHREAD)
 // the thread-local default heap for allocation
 mi_decl_thread mi_heap_t* _mi_heap_default = (mi_heap_t*)&_mi_heap_empty;
+#endif
 
 extern mi_heap_t _mi_heap_main;
 
@@ -139,7 +192,8 @@ static mi_tld_t tld_main = {
   &_mi_heap_main, & _mi_heap_main,
   { MI_SEGMENT_SPAN_QUEUES_EMPTY, 0, 0, 0, 0, &tld_main.stats, &tld_main.os }, // segments
   { 0, &tld_main.stats },  // os
-  { MI_STATS_NULL }       // stats
+  { MI_STATS_NULL },       // stats
+  0
 };
 
 mi_heap_t _mi_heap_main = {
@@ -154,6 +208,8 @@ mi_heap_t _mi_heap_main = {
   0,                // page count
   MI_BIN_FULL, 0,   // page retired min/max
   NULL,             // next heap
+  NULL,             // next thread heap
+  NULL,             // prev thread heap
   false             // can reclaim
 };
 
@@ -161,6 +217,10 @@ bool _mi_process_is_initialized = false;  // set to `true` in `mi_process_init`.
 
 mi_stats_t _mi_stats_main = { MI_STATS_NULL };
 
+mi_stats_t _mi_stats_get_empty_stats(void) {
+  mi_stats_t empty_stats = { MI_STATS_NULL };
+  return empty_stats;
+}
 
 static void mi_heap_main_init(void) {
   if (_mi_heap_main.cookie == 0) {
@@ -169,6 +229,7 @@ static void mi_heap_main_init(void) {
     _mi_random_init(&_mi_heap_main.random);
     _mi_heap_main.keys[0] = _mi_heap_random_next(&_mi_heap_main);
     _mi_heap_main.keys[1] = _mi_heap_random_next(&_mi_heap_main);
+    heap_queue_last = &_mi_heap_main;
   }
 }
 
@@ -282,6 +343,10 @@ static bool _mi_heap_init(void) {
     tld->segments.os = &tld->os;
     tld->os.stats = &tld->stats;
     _mi_heap_set_default_direct(heap);    
+#if defined(MI_USE_SYNCHRONIZED_ITERATE)
+    while (mi_atomic_load_acquire(&heap_init_disabled)) {}
+#endif
+    mi_heap_queue_push(heap);
   }
   return false;
 }
@@ -289,6 +354,7 @@ static bool _mi_heap_init(void) {
 // Free the thread local default heap (called from `mi_thread_done`)
 static bool _mi_heap_done(mi_heap_t* heap) {
   if (!mi_heap_is_initialized(heap)) return true;
+  mi_heap_queue_remove(heap);
 
   // reset default heap
   _mi_heap_set_default_direct(_mi_is_main_thread() ? &_mi_heap_main : (mi_heap_t*)&_mi_heap_empty);
@@ -545,6 +611,11 @@ static void mi_process_load(void) {
   }
 }
 
+void mi_lazy_process_load() {
+  if (mi_likely(_mi_process_is_initialized)) return;
+  mi_process_load();
+}
+
 #if defined(_WIN32) && (defined(_M_IX86) || defined(_M_X64))
 #include <intrin.h>
 mi_decl_cache_align bool _mi_cpu_has_fsrm = false;
@@ -685,7 +756,7 @@ static void mi_process_done(void) {
 #elif defined(__GNUC__) || defined(__clang__)
   // GCC,Clang: use the constructor attribute
   static void __attribute__((constructor)) _mi_process_init(void) {
-    mi_process_load();
+    mi_lazy_process_load();
   }
 
 #else

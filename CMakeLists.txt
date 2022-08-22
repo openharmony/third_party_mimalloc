@@ -4,6 +4,9 @@ project(libmimalloc C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+add_compile_definitions(DISABLE_PLATFORM_MALLOC_ITERATE_TEST)
+add_compile_definitions(MI_USE_SYNCHRONIZED_ITERATE)
+
 option(MI_SECURE            "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)" OFF)
 option(MI_DEBUG_FULL        "Use full internal heap invariant checking in DEBUG mode (expensive)" OFF)
 option(MI_PADDING           "Enable padding to detect heap block overflow (used only in DEBUG mode)" ON)
@@ -32,21 +35,7 @@ include(GNUInstallDirs)
 include("cmake/mimalloc-config-version.cmake")
 
 set(mi_sources
-    src/stats.c
-    src/random.c
-    src/os.c
-    src/bitmap.c
-    src/arena.c
-    src/segment-cache.c
-    src/segment.c
-    src/page.c
-    src/alloc.c
-    src/alloc-aligned.c
-    src/alloc-posix.c
-    src/heap.c
-    src/options.c
-    src/init.c)
-
+    src/static.c)
 
 # -----------------------------------------------------------------------------
 # Convenience: set default build type depending on the build directory
@@ -152,6 +141,15 @@ if(MI_DEBUG_TSAN)
   else()
     message(WARNING "Can only use thread sanitizer with clang (MI_DEBUG_TSAN=ON but ignored)")    
   endif()  
+endif()
+
+if(DEFINED MI_STAT)
+  if(MI_STAT MATCHES "^[0-9]+$")
+    message(STATUS "Using MI_STAT=${MI_STAT}")
+    list(APPEND mi_defines MI_STAT=${MI_STAT})
+  else()
+    message(SEND_ERROR "MI_STAT is expected to be a positive integer")
+  endif()
 endif()
 
 if(MI_DEBUG_UBSAN)
@@ -383,15 +381,29 @@ endif()
 if (MI_BUILD_TESTS)
   enable_testing()
 
-  foreach(TEST_NAME api api-fill stress)
+  foreach(TEST_NAME api api-fill stress stats-print info mallinfo2 mallopt)
     add_executable(mimalloc-test-${TEST_NAME} test/test-${TEST_NAME}.c)
     target_compile_definitions(mimalloc-test-${TEST_NAME} PRIVATE ${mi_defines})
     target_compile_options(mimalloc-test-${TEST_NAME} PRIVATE ${mi_cflags})
     target_include_directories(mimalloc-test-${TEST_NAME} PRIVATE include)
     target_link_libraries(mimalloc-test-${TEST_NAME} PRIVATE mimalloc ${mi_libraries})
-
     add_test(NAME test-${TEST_NAME} COMMAND mimalloc-test-${TEST_NAME})
   endforeach()
+
+  # for *.cpp files
+  foreach(TEST_NAME malloc_iterate disable)
+    add_executable(mimalloc-test-${TEST_NAME} test/test-${TEST_NAME}.cpp)
+    target_compile_definitions(mimalloc-test-${TEST_NAME} PRIVATE ${mi_defines})
+    target_compile_options(mimalloc-test-${TEST_NAME} PRIVATE ${mi_cflags})
+    target_include_directories(mimalloc-test-${TEST_NAME} PRIVATE include)
+    target_link_libraries(mimalloc-test-${TEST_NAME} PRIVATE mimalloc ${mi_libraries})
+
+    add_test(NAME test-${TEST_NAME} COMMAND mimalloc-test-${TEST_NAME})    
+  endforeach()
+
+  find_package(LibXml2 REQUIRED)
+  target_link_libraries(mimalloc-test-info PRIVATE ${LIBXML2_LIBRARY})
+  target_include_directories(mimalloc-test-info PRIVATE ${LIBXML2_INCLUDE_DIRS})
 endif()
 
 # -----------------------------------------------------------------------------

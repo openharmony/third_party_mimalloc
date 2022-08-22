@@ -291,8 +291,9 @@ typedef struct mi_page_s {
   _Atomic(mi_thread_free_t) xthread_free;  // list of deferred free blocks freed by other threads
   _Atomic(uintptr_t)        xheap;
 
-  struct mi_page_s* next;                  // next page owned by this thread with the same `block_size`
-  struct mi_page_s* prev;                  // previous page owned by this thread with the same `block_size`
+  struct mi_page_s*     next;                  // next page owned by this thread with the same `block_size`
+  struct mi_page_s*     prev;                  // previous page owned by this thread with the same `block_size`
+  // _Atomic(uintptr_t)    tagged_ptr;
 
   // 64-bit 9 words, 32-bit 12 words, (+2 for secure)
   #if MI_INTPTR_SIZE==8
@@ -395,12 +396,28 @@ typedef struct mi_segment_s {
 // Thread local data
 typedef struct mi_tld_s mi_tld_t;
 
+// callback for malloc_iterate
+typedef void (*malloc_iterate_callback)(void* base, size_t size, void* arg);
+
+// structure for malloc_iterate start/stop range and callback with a parameter (arg)
+typedef struct mi_iterate_info_s {
+  uintptr_t               start_ptr;
+  uintptr_t               end_ptr;
+  malloc_iterate_callback callback;
+  void*                   arg;
+} mi_iterate_info_t;
+
 // Pages of a certain block size are held in a queue.
 typedef struct mi_page_queue_s {
   mi_page_t* first;
   mi_page_t* last;
   size_t     block_size;
 } mi_page_queue_t;
+
+typedef struct mi_detached_page_queue_s {
+  mi_page_t* first;
+  mi_page_t* last;
+} mi_detached_page_queue_t;
 
 #define MI_BIN_FULL  (MI_BIN_HUGE+1)
 
@@ -442,6 +459,8 @@ struct mi_heap_s {
   size_t                page_retired_min;                    // smallest retired index (retired pages are fully free, but still in the page queues)
   size_t                page_retired_max;                    // largest retired index into the `pages` array.
   mi_heap_t*            next;                                // list of heaps per thread
+  mi_heap_t*            next_thread_heap;
+  mi_heap_t*            prev_thread_heap;
   bool                  no_reclaim;                          // `true` if this heap should not reclaim abandoned pages
 };
 
@@ -586,13 +605,14 @@ typedef struct mi_segments_tld_s {
 
 // Thread local data
 struct mi_tld_s {
-  unsigned long long  heartbeat;     // monotonic heartbeat count
-  bool                recurse;       // true if deferred was called; used to prevent infinite recursion.
-  mi_heap_t*          heap_backing;  // backing heap of this thread (cannot be deleted)
-  mi_heap_t*          heaps;         // list of heaps in this thread (so we can abandon all when the thread terminates)
-  mi_segments_tld_t   segments;      // segment tld
-  mi_os_tld_t         os;            // os tld
-  mi_stats_t          stats;         // statistics
+  unsigned long long  heartbeat;        // monotonic heartbeat count
+  bool                recurse;          // true if deferred was called; used to prevent infinite recursion.
+  mi_heap_t*          heap_backing;     // backing heap of this thread (cannot be deleted)
+  mi_heap_t*          heaps;            // list of heaps in this thread (so we can abandon all when the thread terminates)
+  mi_segments_tld_t   segments;         // segment tld
+  mi_os_tld_t         os;               // os tld
+  mi_stats_t          stats;            // statistics
+  _Atomic(bool)       malloc_disabled;  // lock allocator when mi_malloc_disable() was called
 };
 
 #endif

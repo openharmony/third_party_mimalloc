@@ -1,0 +1,88 @@
+import("//build/test.gni")
+
+template("mimalloc_unittest") {
+  ohos_unittest(target_name) {
+    module_out_path = "mimalloc_test/${target_name}"
+
+    include_dirs = [
+      ".",
+      "//third_party/mimalloc/include",
+    ]
+
+    deps = [ "//third_party/mimalloc:libmimalloc_shared" ]
+
+    output_name = "${target_name}"
+
+    forward_variables_from(invoker,
+                           "*",
+                           [
+                             "deps",
+                             "include_dirs",
+                           ])
+
+    if (!defined(sources)) {
+      sources = [ "${target_name}.c" ]
+    }
+
+    if (defined(invoker.deps)) {
+      deps += invoker.deps
+    }
+
+    if (defined(invoker.include_dirs)) {
+      include_dirs += invoker.include_dirs
+    }
+  }
+}
+
+mimalloc_unittest("test-api") {
+}
+
+mimalloc_unittest("test-api-fill") {
+}
+
+mimalloc_unittest("test-stress") {
+}
+
+mimalloc_unittest("test-stats-print") {
+}
+
+mimalloc_unittest("test-mallinfo2") {
+}
+
+mimalloc_unittest("test-mallopt") {
+}
+
+mimalloc_unittest("test-malloc_iterate") {
+  use_exceptions = true
+
+  sources = [ "test-malloc_iterate.cpp" ]
+}
+
+mimalloc_unittest("test-disable") {
+  use_exceptions = true
+
+  sources = [ "test-disable.cpp" ]
+}
+
+mimalloc_unittest("test-info") {
+  include_dirs = [ "//third_party/libxml2/include" ]
+
+  lib_dirs = [ "${root_out_dir}/thirdparty/libxml2" ]
+
+  libs = [ "xml2.z" ]
+}
+
+group("mimalloc_test") {
+  testonly = true
+  deps = [
+    ":test-api",
+    ":test-api-fill",
+    ":test-disable",
+    ":test-info",
+    ":test-mallinfo2",
+    ":test-malloc_iterate",
+    ":test-mallopt",
+    ":test-stats-print",
+    ":test-stress",
+  ]
+}

@@ -116,7 +116,12 @@ extern inline mi_decl_restrict void* mi_heap_malloc(mi_heap_t* heap, size_t size
 }
 
 extern inline mi_decl_restrict void* mi_malloc(size_t size) mi_attr_noexcept {
-  return mi_heap_malloc(mi_get_default_heap(), size);
+  mi_lazy_process_load();
+  bool locked = _mi_heap_lock_malloc();
+  void* res = mi_heap_malloc(mi_get_default_heap(), size);
+  if (mi_likely(locked))
+    _mi_heap_unlock_malloc();
+  return res;
 }
 
 
@@ -362,6 +367,7 @@ static mi_decl_noinline void _mi_free_block_mt(mi_page_t* page, mi_block_t* bloc
   mi_segment_t* segment = _mi_page_segment(page);
   if (segment->kind==MI_SEGMENT_HUGE) {
     mi_stat_huge_free(page);
+    _mi_page_remove_detached_page(page);
     _mi_segment_huge_page_free(segment, page, block);
     return;
   }
@@ -483,7 +489,7 @@ static inline mi_segment_t* mi_checked_ptr_segment(const void* p, const char* ms
 }
 
 // Free a block 
-void mi_free(void* p) mi_attr_noexcept
+void mi_free_internal(void* p) mi_attr_noexcept
 {
   mi_segment_t* const segment = mi_checked_ptr_segment(p,"mi_free");
   if (mi_unlikely(segment == NULL)) return; 
@@ -511,6 +517,14 @@ void mi_free(void* p) mi_attr_noexcept
     // note: recalc page in generic to improve code generation
     mi_free_generic(segment, tid == segment->thread_id, p);
   }
+}
+
+void mi_free(void* p) mi_attr_noexcept
+{
+  bool locked = _mi_heap_lock_malloc();
+  mi_free_internal(p);
+  if (mi_likely(locked))
+    _mi_heap_unlock_malloc();
 }
 
 bool _mi_free_delayed_block(mi_block_t* block) {
@@ -547,7 +561,7 @@ mi_decl_noinline static size_t mi_page_usable_aligned_size_of(const mi_segment_t
 static inline size_t _mi_usable_size(const void* p, const char* msg) mi_attr_noexcept {
   const mi_segment_t* const segment = mi_checked_ptr_segment(p, msg);
   if (segment==NULL) return 0;  // also returns 0 if `p == NULL`
-  const mi_page_t* const page = _mi_segment_page_of(segment, p);  
+  const mi_page_t* const page = _mi_segment_page_of(segment, p);
   if (mi_likely(!mi_page_has_aligned(page))) {
     const mi_block_t* block = (const mi_block_t*)p;
     return mi_page_usable_size_of(page, block);
@@ -609,7 +623,12 @@ extern inline mi_decl_restrict void* mi_heap_calloc(mi_heap_t* heap, size_t coun
 }
 
 mi_decl_restrict void* mi_calloc(size_t count, size_t size) mi_attr_noexcept {
-  return mi_heap_calloc(mi_get_default_heap(),count,size);
+  mi_lazy_process_load();
+  bool locked = _mi_heap_lock_malloc();
+  void* res = mi_heap_calloc(mi_get_default_heap(),count,size);
+  if (mi_likely(locked))
+    _mi_heap_unlock_malloc();
+  return res;
 }
 
 // Uninitialized `calloc`
@@ -638,6 +657,7 @@ void* mi_expand(void* p, size_t newsize) mi_attr_noexcept {
 }
 
 void* _mi_heap_realloc_zero(mi_heap_t* heap, void* p, size_t newsize, bool zero) mi_attr_noexcept {
+  mi_lazy_process_load();
   const size_t size = _mi_usable_size(p,"mi_realloc"); // also works if p == NULL
   if (mi_unlikely(newsize <= size && newsize >= (size / 2))) {
     // todo: adjust potential padding to reflect the new size?
@@ -836,7 +856,7 @@ static bool mi_try_new_handler(bool nothrow) {
 typedef void (*std_new_handler_t)(void);
 
 #if (defined(__GNUC__) || defined(__clang__))
-std_new_handler_t __attribute((weak)) _ZSt15get_new_handlerv(void) {
+std_new_handler_t __attribute((__weak__)) _ZSt15get_new_handlerv(void) {
   return NULL;
 }
 static std_new_handler_t mi_get_new_handler(void) {
@@ -931,4 +951,36 @@ void* mi_new_reallocn(void* p, size_t newcount, size_t size) {
   else {
     return mi_new_realloc(p, total);
   }
+}
+
+#define cap_max(x, MAX_VALUE) ((x > MAX_VALUE) ? MAX_VALUE : x)
+#define cap(x) cap_max(x, INT_MAX)
+#define cap2(x) cap_max(x, SIZE_MAX)
+
+struct mallinfo mi_mallinfo(void) {
+  struct mallinfo mi = {0};
+  struct mallinfo_s mi_mallinfo = {0};
+
+  mi_stats_mallinfo(&mi_mallinfo);
+
+  mi.hblks = cap(mi_mallinfo.mmap_calls);
+  mi.hblkhd = cap(mi_mallinfo.reserved);
+  mi.uordblks = cap(mi_mallinfo.allocated);
+  mi.fordblks = cap(mi_mallinfo.freed);
+
+  return mi;
+}
+
+struct mallinfo2 mi_mallinfo2(void) {
+  struct mallinfo2 mi2 = {0};
+  struct mallinfo_s mi_mallinfo = {0};
+
+  mi_stats_mallinfo(&mi_mallinfo);
+
+  mi2.hblks = cap2(mi_mallinfo.mmap_calls);
+  mi2.hblkhd = cap2(mi_mallinfo.reserved);
+  mi2.uordblks = cap2(mi_mallinfo.allocated);
+  mi2.fordblks = cap2(mi_mallinfo.freed);
+
+  return mi2;
 }
