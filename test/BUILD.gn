@@ -34,6 +34,33 @@ template("mimalloc_unittest") {
   }
 }
 
+template("without_mimalloc_test") {
+  ohos_unittest(target_name) {
+    module_out_path = "mimalloc_test/${target_name}"
+
+    output_name = "${target_name}"
+
+    forward_variables_from(invoker,
+                           "*",
+                           [
+                             "deps",
+                             "include_dirs",
+                           ])
+
+    if (!defined(sources)) {
+      sources = [ "${target_name}.c" ]
+    }
+
+    if (defined(invoker.deps)) {
+      deps += invoker.deps
+    }
+
+    if (defined(invoker.include_dirs)) {
+      include_dirs += invoker.include_dirs
+    }
+  }
+}
+
 mimalloc_unittest("test-api") {
 }
 
@@ -72,9 +99,27 @@ mimalloc_unittest("test-info") {
   libs = [ "xml2.z" ]
 }
 
+mimalloc_unittest("bench-malloc-thread") {
+  sources = [ "perfomance/bench-malloc-thread.c" ]
+}
+
+mimalloc_unittest("xmalloc-test") {
+  sources = [ "perfomance/xmalloc-test.c" ]
+}
+
+without_mimalloc_test("bench-malloc-thread-default") {
+  sources = [ "perfomance/bench-malloc-thread.c" ]
+}
+
+without_mimalloc_test("xmalloc-test-default") {
+  sources = [ "perfomance/xmalloc-test.c" ]
+}
+
 group("mimalloc_test") {
   testonly = true
   deps = [
+    ":bench-malloc-thread",
+    ":bench-malloc-thread-default",
     ":test-api",
     ":test-api-fill",
     ":test-disable",
@@ -84,5 +129,7 @@ group("mimalloc_test") {
     ":test-mallopt",
     ":test-stats-print",
     ":test-stress",
+    ":xmalloc-test",
+    ":xmalloc-test-default",
   ]
 }
