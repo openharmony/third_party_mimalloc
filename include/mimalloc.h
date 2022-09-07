@@ -397,6 +397,9 @@ mi_decl_export void mi_option_set(mi_option_t option, long value);
 mi_decl_export void mi_option_set_default(mi_option_t option, long value);
 mi_decl_export int mi_mallopt(int param, int value);
 
+// Stubs
+mi_decl_export ssize_t mi_malloc_backtrace(void *pointer, uintptr_t* frames, size_t frame_count);
+
 // -------------------------------------------------------------------------------------------------------
 // "mi" prefixed implementations of various posix, Unix, Windows, and C++ allocation functions.
 // (This can be convenient when providing overrides of these functions as done in `mimalloc-override.h`.)

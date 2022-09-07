@@ -381,7 +381,7 @@ endif()
 if (MI_BUILD_TESTS)
   enable_testing()
 
-  foreach(TEST_NAME api api-fill stress stats-print info mallinfo2 mallopt)
+  foreach(TEST_NAME api api-fill stress stats-print info mallinfo2 mallopt backtrace)
     add_executable(mimalloc-test-${TEST_NAME} test/test-${TEST_NAME}.c)
     target_compile_definitions(mimalloc-test-${TEST_NAME} PRIVATE ${mi_defines})
     target_compile_options(mimalloc-test-${TEST_NAME} PRIVATE ${mi_cflags})

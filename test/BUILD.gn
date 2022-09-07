@@ -115,6 +115,9 @@ without_mimalloc_test("xmalloc-test-default") {
   sources = [ "perfomance/xmalloc-test.c" ]
 }
 
+mimalloc_unittest("test-backtrace") {
+}
+
 group("mimalloc_test") {
   testonly = true
   deps = [
@@ -122,6 +125,7 @@ group("mimalloc_test") {
     ":bench-malloc-thread-default",
     ":test-api",
     ":test-api-fill",
+    ":test-backtrace",
     ":test-disable",
     ":test-info",
     ":test-mallinfo2",
