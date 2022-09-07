@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include <assert.h>
+#include "mimalloc.h"
 
 #define ALLOC_NUM 100
 
@@ -10,7 +10,7 @@ void test_mallinfo2(void)
 {
   struct mallinfo2 mi2;
 
-  mi2 = mallinfo2();
+  mi2 = mi_mallinfo2();
 
   assert(mi2.hblks);
   assert(mi2.hblkhd);
