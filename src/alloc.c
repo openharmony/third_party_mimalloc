@@ -953,6 +953,10 @@ void* mi_new_reallocn(void* p, size_t newcount, size_t size) {
   }
 }
 
+ssize_t mi_malloc_backtrace(void *pointer, uintptr_t* frames, size_t frame_count) {
+  return 0;
+}
+
 #define cap_max(x, MAX_VALUE) ((x > MAX_VALUE) ? MAX_VALUE : x)
 #define cap(x) cap_max(x, INT_MAX)
 #define cap2(x) cap_max(x, SIZE_MAX)
