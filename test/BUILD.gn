@@ -99,30 +99,12 @@ mimalloc_unittest("test-info") {
   libs = [ "xml2.z" ]
 }
 
-mimalloc_unittest("bench-malloc-thread") {
-  sources = [ "perfomance/bench-malloc-thread.c" ]
-}
-
-mimalloc_unittest("xmalloc-test") {
-  sources = [ "perfomance/xmalloc-test.c" ]
-}
-
-without_mimalloc_test("bench-malloc-thread-default") {
-  sources = [ "perfomance/bench-malloc-thread.c" ]
-}
-
-without_mimalloc_test("xmalloc-test-default") {
-  sources = [ "perfomance/xmalloc-test.c" ]
-}
-
 mimalloc_unittest("test-backtrace") {
 }
 
 group("mimalloc_test") {
   testonly = true
   deps = [
-    ":bench-malloc-thread",
-    ":bench-malloc-thread-default",
     ":test-api",
     ":test-api-fill",
     ":test-backtrace",
@@ -133,7 +115,5 @@ group("mimalloc_test") {
     ":test-mallopt",
     ":test-stats-print",
     ":test-stress",
-    ":xmalloc-test",
-    ":xmalloc-test-default",
   ]
 }
